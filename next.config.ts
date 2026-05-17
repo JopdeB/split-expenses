@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  cacheComponents: true,
+  // Disabled because admin pages are fully dynamic per user/request.
+  cacheComponents: false,
 };
 
 export default nextConfig;

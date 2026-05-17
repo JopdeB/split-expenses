@@ -1,43 +1,122 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import { InfoIcon } from "lucide-react";
-import { FetchDataSteps } from "@/components/tutorial/fetch-data-steps";
-import { Suspense } from "react";
+import { formatEuro } from "@/lib/format";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
-async function UserDetails() {
+export default async function ProtectedPage() {
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims) redirect("/auth/login");
 
-  if (error || !data?.claims) {
-    redirect("/auth/login");
+  const { data: btw } = await supabase
+    .from("v_btw_quarterly")
+    .select("jaar, btw_inkomsten, btw_uitgaven, btw_netto");
+
+  const { data: latest } = await supabase
+    .from("v_transactions")
+    .select("id, datum, location_name, omschrijving, bedrag_inkomsten, bedrag_uitgaven")
+    .order("datum", { ascending: false })
+    .limit(5);
+
+  const yearTotals = new Map<number, { in: number; uit: number; net: number }>();
+  for (const r of btw ?? []) {
+    const prev = yearTotals.get(r.jaar) ?? { in: 0, uit: 0, net: 0 };
+    prev.in += Number(r.btw_inkomsten) || 0;
+    prev.uit += Number(r.btw_uitgaven) || 0;
+    prev.net += Number(r.btw_netto) || 0;
+    yearTotals.set(r.jaar, prev);
   }
+  const years = Array.from(yearTotals.keys()).sort((a, b) => b - a);
 
-  return JSON.stringify(data.claims, null, 2);
-}
-
-export default function ProtectedPage() {
   return (
-    <div className="flex-1 w-full flex flex-col gap-12">
-      <div className="w-full">
-        <div className="bg-accent text-sm p-3 px-5 rounded-md text-foreground flex gap-3 items-center">
-          <InfoIcon size="16" strokeWidth={2} />
-          This is a protected page that you can only see as an authenticated
-          user
+    <>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <Button asChild>
+          <Link href="/protected/transacties/nieuw">Nieuwe transactie</Link>
+        </Button>
+      </div>
+
+      <section>
+        <h2 className="text-sm font-medium text-muted-foreground mb-3">
+          BTW per jaar (alle locaties)
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {years.length === 0 && (
+            <p className="text-sm text-muted-foreground col-span-3">
+              Nog geen transacties.
+            </p>
+          )}
+          {years.map((y) => {
+            const t = yearTotals.get(y)!;
+            return (
+              <Card key={y}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">{y}</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">BTW inkomsten</span>
+                    <span>{formatEuro(t.in)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">BTW uitgaven</span>
+                    <span>{formatEuro(t.uit)}</span>
+                  </div>
+                  <div className="flex justify-between font-medium pt-1 border-t">
+                    <span>Netto BTW</span>
+                    <span className={t.net < 0 ? "text-red-600" : ""}>
+                      {formatEuro(t.net)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
-      </div>
-      <div className="flex flex-col gap-2 items-start">
-        <h2 className="font-bold text-2xl mb-4">Your user details</h2>
-        <pre className="text-xs font-mono p-3 rounded border max-h-32 overflow-auto">
-          <Suspense>
-            <UserDetails />
-          </Suspense>
-        </pre>
-      </div>
-      <div>
-        <h2 className="font-bold text-2xl mb-4">Next steps</h2>
-        <FetchDataSteps />
-      </div>
-    </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-muted-foreground mb-3">
+          Laatste transacties
+        </h2>
+        <div className="border rounded-md">
+          {(latest ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground p-4">
+              Geen transacties gevonden.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <tbody>
+                {(latest ?? []).map((t) => (
+                  <tr key={t.id} className="border-b last:border-b-0">
+                    <td className="p-2 text-muted-foreground whitespace-nowrap">
+                      {new Date(t.datum).toLocaleDateString("nl-NL")}
+                    </td>
+                    <td className="p-2">{t.location_name}</td>
+                    <td className="p-2 max-w-md truncate">
+                      {t.omschrijving}
+                    </td>
+                    <td className="p-2 text-right">
+                      {Number(t.bedrag_inkomsten) > 0
+                        ? formatEuro(t.bedrag_inkomsten)
+                        : ""}
+                    </td>
+                    <td className="p-2 text-right text-red-700">
+                      {Number(t.bedrag_uitgaven) > 0
+                        ? "− " + formatEuro(t.bedrag_uitgaven)
+                        : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+    </>
   );
 }
