@@ -49,34 +49,34 @@ export function ForgotPasswordForm({
       {success ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Check Your Email</CardTitle>
-            <CardDescription>Password reset instructions sent</CardDescription>
+            <CardTitle className="text-2xl">Check je e-mail</CardTitle>
+            <CardDescription>Reset-instructies verstuurd</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              If you registered using your email and password, you will receive
-              a password reset email.
+              Als dit e-mailadres bekend is, ontvang je een mail met een link
+              om je wachtwoord opnieuw in te stellen.
             </p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Reset Your Password</CardTitle>
+            <CardTitle className="text-2xl">Wachtwoord vergeten</CardTitle>
             <CardDescription>
-              Type in your email and we&apos;ll send you a link to reset your
-              password
+              Vul je e-mailadres in; we sturen je een link om je wachtwoord
+              opnieuw in te stellen.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleForgotPassword}>
               <div className="flex flex-col gap-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">E-mail</Label>
                   <Input
                     id="email"
                     type="email"
-                    placeholder="m@example.com"
+                    placeholder="naam@voorbeeld.nl"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -84,16 +84,15 @@ export function ForgotPasswordForm({
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
                 <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? "Sending..." : "Send reset email"}
+                  {isLoading ? "Bezig met versturen…" : "Stuur reset-mail"}
                 </Button>
               </div>
               <div className="mt-4 text-center text-sm">
-                Already have an account?{" "}
                 <Link
                   href="/auth/login"
                   className="underline underline-offset-4"
                 >
-                  Login
+                  Terug naar inloggen
                 </Link>
               </div>
             </form>
