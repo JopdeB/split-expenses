@@ -35,8 +35,8 @@ export default async function GrootboekPage({
     .select("*")
     .eq("jaar", jaar);
 
-  // Build lookup: ledgerId -> locationId -> {in, uit, netto}
-  const lookup = new Map<number, Map<number, { in: number; uit: number; net: number }>>();
+  // Build lookup: ledgerId -> locationId -> {in, uit, deel, netto}
+  const lookup = new Map<number, Map<number, { in: number; uit: number; deel: number; net: number }>>();
   for (const r of (rows as GrootboekRow[] | null) ?? []) {
     let perLoc = lookup.get(r.ledger_account_id);
     if (!perLoc) {
@@ -46,21 +46,22 @@ export default async function GrootboekPage({
     perLoc.set(r.location_id, {
       in: Number(r.inkomsten) || 0,
       uit: Number(r.uitgaven) || 0,
+      deel: Number(r.deeluitgaven) || 0,
       net: Number(r.netto) || 0,
     });
   }
 
   function cell(ledgerId: number, locId: number) {
-    return lookup.get(ledgerId)?.get(locId) ?? { in: 0, uit: 0, net: 0 };
+    return lookup.get(ledgerId)?.get(locId) ?? { in: 0, uit: 0, deel: 0, net: 0 };
   }
 
   function totalForLocation(locId: number) {
-    let i = 0, u = 0, n = 0;
+    let i = 0, u = 0, d = 0, n = 0;
     for (const acc of accounts) {
       const c = cell(acc.id, locId);
-      i += c.in; u += c.uit; n += c.net;
+      i += c.in; u += c.uit; d += c.deel; n += c.net;
     }
-    return { in: i, uit: u, net: n };
+    return { in: i, uit: u, deel: d, net: n };
   }
 
   return (
@@ -71,7 +72,9 @@ export default async function GrootboekPage({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Bedragen exclusief BTW. Per locatie: inkomsten, uitgaven en netto.
+        Bedragen exclusief BTW. Per locatie: inkomsten, uitgaven, deeluitgaven en netto.
+        Deeluitgaven worden door de boekhouder aan jaareinde gesplitst (% privé/zakelijk)
+        en zitten daarom niet in netto.
       </p>
 
       <div className="border rounded-md overflow-x-auto">
@@ -80,11 +83,11 @@ export default async function GrootboekPage({
             <tr>
               <th className="p-2 font-medium" rowSpan={2}>Grootboek</th>
               {locs.map((l) => (
-                <th key={l.id} className="p-2 font-medium text-center border-l" colSpan={3}>
+                <th key={l.id} className="p-2 font-medium text-center border-l" colSpan={4}>
                   {l.name}
                 </th>
               ))}
-              <th className="p-2 font-medium text-center border-l bg-muted/60" colSpan={3}>
+              <th className="p-2 font-medium text-center border-l bg-muted/60" colSpan={4}>
                 Totaal
               </th>
             </tr>
@@ -96,7 +99,7 @@ export default async function GrootboekPage({
           </thead>
           <tbody>
             {accounts.map((acc) => {
-              let tIn = 0, tUit = 0, tNet = 0;
+              let tIn = 0, tUit = 0, tDeel = 0, tNet = 0;
               return (
                 <tr key={acc.id} className="border-t hover:bg-muted/20">
                   <td className="p-2 whitespace-nowrap">
@@ -105,13 +108,13 @@ export default async function GrootboekPage({
                   </td>
                   {locs.map((l) => {
                     const c = cell(acc.id, l.id);
-                    tIn += c.in; tUit += c.uit; tNet += c.net;
+                    tIn += c.in; tUit += c.uit; tDeel += c.deel; tNet += c.net;
                     return (
                       <CellGroup key={l.id} value={c} />
                     );
                   })}
                   <CellGroup
-                    value={{ in: tIn, uit: tUit, net: tNet }}
+                    value={{ in: tIn, uit: tUit, deel: tDeel, net: tNet }}
                     emphasis
                   />
                 </tr>
@@ -125,12 +128,12 @@ export default async function GrootboekPage({
               })}
               <CellGroup
                 value={(() => {
-                  let i = 0, u = 0, n = 0;
+                  let i = 0, u = 0, d = 0, n = 0;
                   for (const l of locs) {
                     const c = totalForLocation(l.id);
-                    i += c.in; u += c.uit; n += c.net;
+                    i += c.in; u += c.uit; d += c.deel; n += c.net;
                   }
-                  return { in: i, uit: u, net: n };
+                  return { in: i, uit: u, deel: d, net: n };
                 })()}
                 emphasis
               />
@@ -152,6 +155,9 @@ function Cols() {
         Uitgaven
       </th>
       <th className="p-2 font-normal text-xs text-muted-foreground text-right">
+        Deeluitgaven
+      </th>
+      <th className="p-2 font-normal text-xs text-muted-foreground text-right">
         Netto
       </th>
     </>
@@ -162,7 +168,7 @@ function CellGroup({
   value,
   emphasis,
 }: {
-  value: { in: number; uit: number; net: number };
+  value: { in: number; uit: number; deel: number; net: number };
   emphasis?: boolean;
 }) {
   return (
@@ -172,6 +178,9 @@ function CellGroup({
       </td>
       <td className={"p-2 text-right whitespace-nowrap text-red-700 " + (emphasis ? "bg-muted/30" : "")}>
         {formatEuro(value.uit)}
+      </td>
+      <td className={"p-2 text-right whitespace-nowrap text-amber-700 " + (emphasis ? "bg-muted/30" : "")}>
+        {formatEuro(value.deel)}
       </td>
       <td className={"p-2 text-right whitespace-nowrap font-medium " + (emphasis ? "bg-muted/30" : "") + (value.net < 0 ? " text-red-700" : "")}>
         {formatEuro(value.net)}

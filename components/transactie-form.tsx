@@ -37,8 +37,10 @@ export function TransactieForm({
 }: Props) {
   const [bedragIn, setBedragIn] = useState(fmtDecimal(initial?.bedrag_inkomsten));
   const [bedragUit, setBedragUit] = useState(fmtDecimal(initial?.bedrag_uitgaven));
+  const [bedragDeel, setBedragDeel] = useState(fmtDecimal(initial?.bedrag_deeluitgaven));
   const [btwIn, setBtwIn] = useState(fmtDecimal(initial?.btw_inkomsten));
   const [btwUit, setBtwUit] = useState(fmtDecimal(initial?.btw_uitgaven));
+  const [btwDeel, setBtwDeel] = useState(fmtDecimal(initial?.btw_deeluitgaven));
   const [btwCodeId, setBtwCodeId] = useState<string>(
     initial?.btw_code_id ? String(initial.btw_code_id) : ""
   );
@@ -53,6 +55,7 @@ export function TransactieForm({
     const rate = Number(selectedBtw.rate);
     const inN = parseDecimal(bedragIn);
     const uitN = parseDecimal(bedragUit);
+    const deelN = parseDecimal(bedragDeel);
     // BTW formula: BTW = bedrag * (rate / (1 + rate)), assuming the entered
     // amount is the incl-BTW total (as in the Excel data we have).
     const factor = rate / (1 + rate);
@@ -61,6 +64,9 @@ export function TransactieForm({
     }
     if (uitN > 0) {
       setBtwUit((uitN * factor).toFixed(2).replace(".", ","));
+    }
+    if (deelN > 0) {
+      setBtwDeel((deelN * factor).toFixed(2).replace(".", ","));
     }
   }
 
@@ -152,6 +158,24 @@ export function TransactieForm({
         />
       </div>
 
+      <div className="grid gap-2">
+        <Label htmlFor="bedrag_deeluitgaven">Bedrag deeluitgaven (incl. BTW)</Label>
+        <Input
+          id="bedrag_deeluitgaven"
+          name="bedrag_deeluitgaven"
+          inputMode="decimal"
+          value={bedragDeel}
+          onChange={(e) => setBedragDeel(e.target.value)}
+          onBlur={recalcBtw}
+          placeholder="0,00"
+        />
+        <p className="text-xs text-muted-foreground">
+          Voor uitgaven die deels privé / deels zakelijk zijn; boekhouder splitst aan jaareinde.
+        </p>
+      </div>
+
+      <div className="hidden md:block" />
+
       <div className="grid gap-2 md:col-span-2">
         <Label htmlFor="btw_code_id">BTW Code</Label>
         <select
@@ -200,6 +224,20 @@ export function TransactieForm({
           placeholder="0,00"
         />
       </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="btw_deeluitgaven">BTW deeluitgaven</Label>
+        <Input
+          id="btw_deeluitgaven"
+          name="btw_deeluitgaven"
+          inputMode="decimal"
+          value={btwDeel}
+          onChange={(e) => setBtwDeel(e.target.value)}
+          placeholder="0,00"
+        />
+      </div>
+
+      <div className="hidden md:block" />
 
       <div className="grid gap-2 md:col-span-2">
         <Label htmlFor="omschrijving">Omschrijving</Label>

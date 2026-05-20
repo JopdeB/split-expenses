@@ -28,6 +28,8 @@ export type Transaction = {
   btw_inkomsten: number;
   bedrag_uitgaven: number;
   btw_uitgaven: number;
+  bedrag_deeluitgaven: number;
+  btw_deeluitgaven: number;
   btw_code_id: number | null;
   ledger_account_id: number | null;
   omschrijving: string | null;
@@ -52,6 +54,7 @@ export type GrootboekRow = {
   ledger_name: string;
   inkomsten: number;
   uitgaven: number;
+  deeluitgaven: number;
   netto: number;
 };
 

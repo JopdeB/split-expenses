@@ -31,6 +31,8 @@ export type TransactionPayload = {
   btw_inkomsten: number;
   bedrag_uitgaven: number;
   btw_uitgaven: number;
+  bedrag_deeluitgaven: number;
+  btw_deeluitgaven: number;
   btw_code_id: number | null;
   ledger_account_id: number | null;
   omschrijving: string | null;
@@ -49,6 +51,8 @@ function payloadFromForm(formData: FormData): TransactionPayload | { error: stri
     btw_inkomsten: parseDecimal(formData.get("btw_inkomsten")),
     bedrag_uitgaven: parseDecimal(formData.get("bedrag_uitgaven")),
     btw_uitgaven: parseDecimal(formData.get("btw_uitgaven")),
+    bedrag_deeluitgaven: parseDecimal(formData.get("bedrag_deeluitgaven")),
+    btw_deeluitgaven: parseDecimal(formData.get("btw_deeluitgaven")),
     btw_code_id: parseIntOrNull(formData.get("btw_code_id")),
     ledger_account_id: parseIntOrNull(formData.get("ledger_account_id")),
     omschrijving: valueOrNull(formData.get("omschrijving")),

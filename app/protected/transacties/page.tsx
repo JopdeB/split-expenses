@@ -80,6 +80,8 @@ export default async function TransactiesPage({
               <th className="p-2 font-medium text-right">BTW in</th>
               <th className="p-2 font-medium text-right">Uitgaven</th>
               <th className="p-2 font-medium text-right">BTW uit</th>
+              <th className="p-2 font-medium text-right">Deeluitgaven</th>
+              <th className="p-2 font-medium text-right">BTW deel</th>
               <th className="p-2 font-medium">Omschrijving</th>
               <th className="p-2 font-medium text-right"></th>
             </tr>
@@ -87,7 +89,7 @@ export default async function TransactiesPage({
           <tbody>
             {(rows as TransactionWithRefs[] | null)?.length === 0 && (
               <tr>
-                <td colSpan={11} className="p-4 text-center text-muted-foreground">
+                <td colSpan={13} className="p-4 text-center text-muted-foreground">
                   Geen transacties gevonden.
                 </td>
               </tr>
@@ -114,6 +116,12 @@ export default async function TransactiesPage({
                 </td>
                 <td className="p-2 text-right whitespace-nowrap text-red-700">
                   {formatEuro(r.btw_uitgaven)}
+                </td>
+                <td className="p-2 text-right whitespace-nowrap text-amber-700">
+                  {formatEuro(r.bedrag_deeluitgaven)}
+                </td>
+                <td className="p-2 text-right whitespace-nowrap text-amber-700">
+                  {formatEuro(r.btw_deeluitgaven)}
                 </td>
                 <td className="p-2 max-w-xs truncate">{r.omschrijving}</td>
                 <td className="p-2 whitespace-nowrap text-right">
