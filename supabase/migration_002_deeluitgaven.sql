@@ -2,6 +2,9 @@
 -- Run this in the Supabase SQL Editor.
 
 -- Postgres won't reorder columns in CREATE OR REPLACE VIEW, so drop and recreate.
+-- v_btw_quarterly depends on v_transactions; drop it first and recreate at the end
+-- (its definition is unchanged — deeluitgaven intentionally excluded from BTW totals).
+drop view if exists public.v_btw_quarterly;
 drop view if exists public.v_grootboek;
 drop view if exists public.v_transactions;
 
@@ -46,3 +49,17 @@ select
 from public.v_transactions
 where ledger_account_id is not null
 group by jaar, location_id, location_name, ledger_account_id, ledger_code, ledger_name;
+
+-- Recreate v_btw_quarterly with its original definition (unchanged: deeluitgaven
+-- is excluded from BTW totals because the boekhouder splits at year-end).
+create view public.v_btw_quarterly as
+select
+  location_id,
+  location_name,
+  jaar,
+  kwartaal,
+  sum(btw_inkomsten)                          as btw_inkomsten,
+  sum(btw_uitgaven)                           as btw_uitgaven,
+  sum(btw_inkomsten - btw_uitgaven)           as btw_netto
+from public.v_transactions
+group by location_id, location_name, jaar, kwartaal;
