@@ -89,6 +89,7 @@ export default async function BtwPage({
                     <th className="p-2 font-normal text-right">BTW inkomsten</th>
                     <th className="p-2 font-normal text-right">BTW uitgaven</th>
                     <th className="p-2 font-normal text-right">Netto BTW</th>
+                    <th className="p-2 font-normal text-right w-12"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -109,6 +110,16 @@ export default async function BtwPage({
                         >
                           {formatEuro(c.net)}
                         </td>
+                        <td className="p-2 text-right">
+                          <a
+                            href={`/api/export/pdf?jaar=${jaar}&kwartaal=${q}`}
+                            className="text-xs underline text-muted-foreground hover:text-foreground"
+                            download
+                            title={`Download ${q} ${jaar} als PDF`}
+                          >
+                            PDF
+                          </a>
+                        </td>
                       </tr>
                     );
                   })}
@@ -126,6 +137,7 @@ export default async function BtwPage({
                     >
                       {formatEuro(total.net)}
                     </td>
+                    <td className="p-2"></td>
                   </tr>
                 </tbody>
               </table>
