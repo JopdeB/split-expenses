@@ -117,7 +117,7 @@ export function TransactieForm({
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
           required
-          className="h-9 rounded-md border bg-background px-2 text-sm"
+          className="h-11 md:h-9 rounded-md border bg-background px-2 text-base md:text-sm"
         >
           <option value="" disabled>
             Kies een locatie…
@@ -160,7 +160,7 @@ export function TransactieForm({
           id="ledger_account_id"
           name="ledger_account_id"
           defaultValue={initial?.ledger_account_id ?? ""}
-          className="h-9 rounded-md border bg-background px-2 text-sm"
+          className="h-11 md:h-9 rounded-md border bg-background px-2 text-base md:text-sm"
         >
           <option value="">— Geen —</option>
           {ledgerAccounts.map((a) => (
@@ -225,7 +225,7 @@ export function TransactieForm({
             setBtwCodeId(e.target.value);
           }}
           onBlur={recalcBtw}
-          className="h-9 rounded-md border bg-background px-2 text-sm"
+          className="h-11 md:h-9 rounded-md border bg-background px-2 text-base md:text-sm"
         >
           <option value="">— Geen —</option>
           {btwCodes.map((c) => (
@@ -289,9 +289,24 @@ export function TransactieForm({
         />
       </div>
 
-      <div className="md:col-span-2 flex gap-2 justify-end">
+      {/* Desktop submit (inline at end of form) */}
+      <div className="hidden md:flex md:col-span-2 gap-2 justify-end">
         <Button type="submit">{submitLabel}</Button>
       </div>
+
+      {/* Mobile submit: sticky bar above the bottom-nav so the button is
+          always reachable, even on long forms */}
+      <div
+        className="md:hidden fixed left-0 right-0 bottom-14 z-30 border-t bg-background/95 backdrop-blur p-3"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+      >
+        <Button type="submit" className="w-full h-12 text-base">
+          {submitLabel}
+        </Button>
+      </div>
+
+      {/* Spacer so the last form field isn't hidden behind the sticky bar */}
+      <div className="md:hidden h-20" aria-hidden />
     </form>
   );
 }

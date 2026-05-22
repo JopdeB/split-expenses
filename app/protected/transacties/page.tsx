@@ -67,7 +67,72 @@ export default async function TransactiesPage({
         years={years}
       />
 
-      <div className="border rounded-md overflow-x-auto">
+      {/* Mobile: card layout */}
+      <div className="md:hidden flex flex-col gap-2">
+        {(rows as TransactionWithRefs[] | null)?.length === 0 && (
+          <p className="p-4 text-center text-muted-foreground text-sm border rounded-md">
+            Geen transacties gevonden.
+          </p>
+        )}
+        {(rows as TransactionWithRefs[] | null)?.map((r) => {
+          const inN = Number(r.bedrag_inkomsten) || 0;
+          const uitN = Number(r.bedrag_uitgaven) || 0;
+          const deelN = Number(r.bedrag_deeluitgaven) || 0;
+          // Pick the dominant amount + color
+          let amount = 0;
+          let amountClass = "";
+          if (inN > 0) {
+            amount = inN;
+            amountClass = "text-foreground";
+          } else if (uitN > 0) {
+            amount = -uitN;
+            amountClass = "text-red-700";
+          } else if (deelN > 0) {
+            amount = -deelN;
+            amountClass = "text-amber-700";
+          }
+          return (
+            <Link
+              key={r.id}
+              href={`/protected/transacties/${r.id}`}
+              className="block border rounded-md p-3 active:bg-muted/40"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-xs text-muted-foreground">
+                    {formatDate(r.datum)} · {r.location_name}
+                    {r.boekstuk ? ` · #${r.boekstuk}` : ""}
+                  </div>
+                  <div className="text-sm font-medium truncate">
+                    {r.ledger_code ? `${r.ledger_code} ${r.ledger_name}` : "Geen grootboek"}
+                  </div>
+                  {r.omschrijving && (
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
+                      {r.omschrijving}
+                    </div>
+                  )}
+                </div>
+                <div className={"text-base font-semibold whitespace-nowrap " + amountClass}>
+                  {amount === 0 ? "—" : formatEuro(amount)}
+                </div>
+              </div>
+              {(Number(r.btw_inkomsten) || Number(r.btw_uitgaven) || Number(r.btw_deeluitgaven)) && (
+                <div className="text-[11px] text-muted-foreground mt-1">
+                  BTW: {formatEuro(
+                    Number(r.btw_inkomsten) ||
+                      Number(r.btw_uitgaven) ||
+                      Number(r.btw_deeluitgaven),
+                  )}
+                  {r.btw_label ? ` · ${r.btw_label}` : ""}
+                </div>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Desktop: table layout */}
+      <div className="hidden md:block border rounded-md overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left">
             <tr>

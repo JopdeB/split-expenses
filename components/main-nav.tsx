@@ -9,12 +9,13 @@ const items = [
   { href: "/protected/transacties", label: "Transacties" },
   { href: "/protected/grootboek", label: "Grootboek" },
   { href: "/protected/btw", label: "BTW" },
+  { href: "/protected/audit", label: "Audit" },
 ];
 
 export function MainNav() {
   const pathname = usePathname();
   return (
-    <div className="flex gap-1 items-center">
+    <div className="hidden md:flex gap-1 items-center">
       {items.map((item) => {
         const isActive =
           item.href === "/protected"
