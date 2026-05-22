@@ -68,7 +68,23 @@ export default async function GrootboekPage({
     <>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold">Grootboek Overzicht</h1>
-        <YearFilter years={years} />
+        <div className="flex items-end gap-2 flex-wrap">
+          <a
+            href={`/api/export/xlsx?jaar=${jaar}`}
+            className="inline-flex items-center h-9 px-3 rounded-md border bg-background text-sm hover:bg-muted"
+            download
+          >
+            Exporteer {jaar} als .xlsx
+          </a>
+          <a
+            href={`/api/export/pdf?jaar=${jaar}`}
+            className="inline-flex items-center h-9 px-3 rounded-md border bg-background text-sm hover:bg-muted"
+            download
+          >
+            …als .pdf
+          </a>
+          <YearFilter years={years} />
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground">
