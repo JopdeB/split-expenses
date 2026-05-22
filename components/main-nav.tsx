@@ -9,6 +9,7 @@ const items = [
   { href: "/protected/transacties", label: "Transacties" },
   { href: "/protected/grootboek", label: "Grootboek" },
   { href: "/protected/btw", label: "BTW" },
+  { href: "/protected/grafieken", label: "Grafieken" },
   { href: "/protected/audit", label: "Audit" },
 ];
 

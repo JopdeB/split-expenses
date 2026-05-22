@@ -33,11 +33,16 @@ export default async function ProtectedPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Button asChild>
-          <Link href="/protected/transacties/nieuw">Nieuwe transactie</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/protected/grafieken">Grafieken</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/protected/transacties/nieuw">Nieuwe transactie</Link>
+          </Button>
+        </div>
       </div>
 
       <section>
