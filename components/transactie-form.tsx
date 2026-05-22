@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BtwCode, LedgerAccount, Location, Transaction } from "@/lib/types";
+import type { NextBoekstukMap } from "@/lib/next-boekstuk";
 
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
   locations: Location[];
   ledgerAccounts: LedgerAccount[];
   btwCodes: BtwCode[];
+  nextBoekstukMap: NextBoekstukMap;
   initial?: Partial<Transaction> | null;
   submitLabel: string;
 };
@@ -32,9 +34,18 @@ export function TransactieForm({
   locations,
   ledgerAccounts,
   btwCodes,
+  nextBoekstukMap,
   initial,
   submitLabel,
 }: Props) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [datum, setDatum] = useState<string>(initial?.datum ?? today);
+  const [locationId, setLocationId] = useState<string>(
+    initial?.location_id ? String(initial.location_id) : "",
+  );
+  const [boekstuk, setBoekstuk] = useState<string>(
+    initial?.boekstuk ? String(initial.boekstuk) : "",
+  );
   const [bedragIn, setBedragIn] = useState(fmtDecimal(initial?.bedrag_inkomsten));
   const [bedragUit, setBedragUit] = useState(fmtDecimal(initial?.bedrag_uitgaven));
   const [bedragDeel, setBedragDeel] = useState(fmtDecimal(initial?.bedrag_deeluitgaven));
@@ -44,6 +55,20 @@ export function TransactieForm({
   const [btwCodeId, setBtwCodeId] = useState<string>(
     initial?.btw_code_id ? String(initial.btw_code_id) : ""
   );
+
+  const suggestedBoekstuk = useMemo(() => {
+    const locId = parseInt(locationId, 10);
+    if (!Number.isFinite(locId) || !datum) return null;
+    const year = parseInt(datum.slice(0, 4), 10);
+    if (!Number.isFinite(year)) return null;
+    const fromMap = nextBoekstukMap[locId]?.[year];
+    return typeof fromMap === "number" ? fromMap : 1;
+  }, [locationId, datum, nextBoekstukMap]);
+
+  const selectedLocationName = useMemo(() => {
+    const locId = parseInt(locationId, 10);
+    return locations.find((l) => l.id === locId)?.name ?? null;
+  }, [locationId, locations]);
 
   const selectedBtw = useMemo(
     () => btwCodes.find((b) => String(b.id) === btwCodeId),
@@ -78,7 +103,8 @@ export function TransactieForm({
           id="datum"
           name="datum"
           type="date"
-          defaultValue={initial?.datum ?? new Date().toISOString().slice(0, 10)}
+          value={datum}
+          onChange={(e) => setDatum(e.target.value)}
           required
         />
       </div>
@@ -88,7 +114,8 @@ export function TransactieForm({
         <select
           id="location_id"
           name="location_id"
-          defaultValue={initial?.location_id ?? ""}
+          value={locationId}
+          onChange={(e) => setLocationId(e.target.value)}
           required
           className="h-9 rounded-md border bg-background px-2 text-sm"
         >
@@ -110,9 +137,21 @@ export function TransactieForm({
           name="boekstuk"
           type="number"
           inputMode="numeric"
-          defaultValue={initial?.boekstuk ?? ""}
-          placeholder="auto"
+          value={boekstuk}
+          onChange={(e) => setBoekstuk(e.target.value)}
+          placeholder={suggestedBoekstuk !== null ? String(suggestedBoekstuk) : "auto"}
         />
+        {suggestedBoekstuk !== null && boekstuk === "" && (
+          <p className="text-xs text-muted-foreground">
+            Leeg laten → automatisch nr.{" "}
+            <span className="font-medium text-foreground">{suggestedBoekstuk}</span>
+            {selectedLocationName && datum && (
+              <>
+                {" "}voor {selectedLocationName} {datum.slice(0, 4)}
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-2">

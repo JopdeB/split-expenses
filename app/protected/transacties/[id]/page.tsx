@@ -9,6 +9,7 @@ import type {
   Location,
   Transaction,
 } from "@/lib/types";
+import { fetchNextBoekstukMap } from "@/lib/next-boekstuk";
 
 export default async function EditTransactiePage({
   params,
@@ -20,12 +21,13 @@ export default async function EditTransactiePage({
   if (!Number.isFinite(txId)) notFound();
 
   const supabase = await createClient();
-  const [{ data: tx }, { data: locations }, { data: ledgerAccounts }, { data: btwCodes }] =
+  const [{ data: tx }, { data: locations }, { data: ledgerAccounts }, { data: btwCodes }, nextBoekstukMap] =
     await Promise.all([
       supabase.from("transactions").select("*").eq("id", txId).single(),
       supabase.from("locations").select("*").order("sort_order"),
       supabase.from("ledger_accounts").select("*").order("sort_order"),
       supabase.from("btw_codes").select("*").order("sort_order"),
+      fetchNextBoekstukMap(supabase),
     ]);
 
   if (!tx) notFound();
@@ -40,6 +42,7 @@ export default async function EditTransactiePage({
         locations={(locations as Location[]) ?? []}
         ledgerAccounts={(ledgerAccounts as LedgerAccount[]) ?? []}
         btwCodes={(btwCodes as BtwCode[]) ?? []}
+        nextBoekstukMap={nextBoekstukMap}
         initial={tx as Transaction}
         submitLabel="Bijwerken"
       />

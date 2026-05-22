@@ -64,6 +64,15 @@ export async function createTransaction(formData: FormData) {
   if ("error" in result) throw new Error(result.error);
 
   const supabase = await createClient();
+
+  // Auto-assign boekstuk when the user left it blank: next number for this
+  // location + year, starting at 1. Race-tolerant: in the worst case two
+  // simultaneous inserts get the same number, which the boekhouder spots in
+  // the list view. Single-tenant family app, low concurrency.
+  if (result.boekstuk === null) {
+    result.boekstuk = await nextBoekstuk(supabase, result.location_id, result.datum);
+  }
+
   const { error } = await supabase.from("transactions").insert(result);
   if (error) throw new Error(error.message);
 
@@ -87,6 +96,33 @@ export async function updateTransaction(id: number, formData: FormData) {
   revalidatePath("/protected/btw");
   revalidatePath("/protected");
   redirect("/protected/transacties");
+}
+
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * Next boekstuk for a given location + year. Returns max(boekstuk)+1, or 1
+ * if the location has no boekingen for that year yet. Errors are swallowed
+ * and produce 1 so the form never blocks on a transient DB issue.
+ */
+export async function nextBoekstuk(
+  supabase: SupabaseClient,
+  location_id: number,
+  datum: string,
+): Promise<number> {
+  const year = parseInt(datum.slice(0, 4), 10);
+  if (!Number.isFinite(year)) return 1;
+  const { data } = await supabase
+    .from("transactions")
+    .select("boekstuk")
+    .eq("location_id", location_id)
+    .gte("datum", `${year}-01-01`)
+    .lte("datum", `${year}-12-31`)
+    .not("boekstuk", "is", null)
+    .order("boekstuk", { ascending: false })
+    .limit(1);
+  const max = data?.[0]?.boekstuk;
+  return typeof max === "number" ? max + 1 : 1;
 }
 
 export async function deleteTransaction(id: number) {
