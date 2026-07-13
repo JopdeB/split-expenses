@@ -93,6 +93,33 @@ export default async function GrootboekPage({
         en zitten daarom niet in netto.
       </p>
 
+      {locs.length > 1 && (
+        <div className="rounded-md border p-3 text-xs">
+          <div className="font-medium mb-2">Exporteer per locatie</div>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {locs.map((l) => (
+              <div key={l.id} className="flex items-center gap-2">
+                <span className="text-muted-foreground">{l.name}:</span>
+                <a
+                  href={`/api/export/xlsx?jaar=${jaar}&location=${l.id}`}
+                  className="underline hover:text-foreground"
+                  download
+                >
+                  .xlsx
+                </a>
+                <a
+                  href={`/api/export/pdf?jaar=${jaar}&location=${l.id}`}
+                  className="underline hover:text-foreground"
+                  download
+                >
+                  .pdf
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="border rounded-md overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left">

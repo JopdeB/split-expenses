@@ -24,29 +24,47 @@ export async function GET(req: NextRequest) {
     return new NextResponse("Invalid jaar", { status: 400 });
   }
 
+  const locationParam = url.searchParams.get("location");
+  const locationId = locationParam ? parseInt(locationParam, 10) : null;
+  if (locationParam && !Number.isFinite(locationId)) {
+    return new NextResponse("Invalid location", { status: 400 });
+  }
+
   const yearStart = `${jaar}-01-01`;
   const yearEnd = `${jaar}-12-31`;
+
+  const txQuery = supabase
+    .from("v_transactions")
+    .select("*")
+    .gte("datum", yearStart)
+    .lte("datum", yearEnd)
+    .order("datum")
+    .order("boekstuk");
+  const gbQuery = supabase.from("v_grootboek").select("*").eq("jaar", jaar);
+  const btwQuery = supabase.from("v_btw_quarterly").select("*").eq("jaar", jaar);
+  if (locationId !== null) {
+    txQuery.eq("location_id", locationId);
+    gbQuery.eq("location_id", locationId);
+    btwQuery.eq("location_id", locationId);
+  }
+
+  const locationLookupPromise = locationId !== null
+    ? supabase.from("locations").select("name").eq("id", locationId).single()
+    : Promise.resolve({ data: null, error: null });
 
   const [
     { data: transactions, error: txErr },
     { data: grootboek, error: gbErr },
     { data: btw, error: btwErr },
-  ] = await Promise.all([
-    supabase
-      .from("v_transactions")
-      .select("*")
-      .gte("datum", yearStart)
-      .lte("datum", yearEnd)
-      .order("datum")
-      .order("boekstuk"),
-    supabase.from("v_grootboek").select("*").eq("jaar", jaar),
-    supabase.from("v_btw_quarterly").select("*").eq("jaar", jaar),
-  ]);
+    { data: locationRow },
+  ] = await Promise.all([txQuery, gbQuery, btwQuery, locationLookupPromise]);
 
   if (txErr || gbErr || btwErr) {
     console.error("xlsx export query error", { txErr, gbErr, btwErr });
     return new NextResponse("Database error", { status: 500 });
   }
+
+  const locationName = (locationRow as { name?: string } | null)?.name ?? null;
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "Admin Pap & Sjanet";
@@ -144,7 +162,8 @@ export async function GET(req: NextRequest) {
   btwSheet.views = [{ state: "frozen", ySplit: 1 }];
 
   const buffer = await wb.xlsx.writeBuffer();
-  const filename = `Admin-Pap-Sjanet-${jaar}.xlsx`;
+  const locSlug = locationName ? `-${slugify(locationName)}` : "";
+  const filename = `Admin-Pap-Sjanet-${jaar}${locSlug}.xlsx`;
 
   return new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
@@ -174,4 +193,12 @@ function numOrNull(v: unknown): number | null {
   const n = typeof v === "number" ? v : parseFloat(String(v));
   if (!Number.isFinite(n)) return null;
   return n;
+}
+
+function slugify(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }

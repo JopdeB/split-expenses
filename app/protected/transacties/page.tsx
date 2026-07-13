@@ -5,11 +5,12 @@ import { formatDate, formatEuro } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { TransactiesFilters } from "@/components/transacties-filters";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
-import type { Location, TransactionWithRefs } from "@/lib/types";
+import type { LedgerAccount, Location, TransactionWithRefs } from "@/lib/types";
 
 type SearchParams = {
   jaar?: string;
   location?: string;
+  ledger?: string;
   q?: string;
 };
 
@@ -21,10 +22,10 @@ export default async function TransactiesPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const { data: locations } = await supabase
-    .from("locations")
-    .select("*")
-    .order("sort_order");
+  const [{ data: locations }, { data: ledgerAccounts }] = await Promise.all([
+    supabase.from("locations").select("*").order("sort_order"),
+    supabase.from("ledger_accounts").select("*").order("sort_order"),
+  ]);
 
   let q = supabase
     .from("v_transactions")
@@ -41,8 +42,15 @@ export default async function TransactiesPage({
   if (sp.location && sp.location !== "all") {
     q = q.eq("location_id", parseInt(sp.location, 10));
   }
+  if (sp.ledger && sp.ledger !== "all") {
+    q = q.eq("ledger_account_id", parseInt(sp.ledger, 10));
+  }
   if (sp.q) {
-    q = q.ilike("omschrijving", `%${sp.q}%`);
+    // Match on either omschrijving or grootboek code (so typing "8000"
+    // finds all huurinkomsten). PostgREST's or() uses a comma-separated
+    // list where commas inside values must be percent-encoded.
+    const term = sp.q.replace(/,/g, "%2C");
+    q = q.or(`omschrijving.ilike.%${term}%,ledger_code.ilike.%${term}%`);
   }
 
   const { data: rows } = await q.limit(500);
@@ -64,6 +72,7 @@ export default async function TransactiesPage({
 
       <TransactiesFilters
         locations={(locations as Location[]) ?? []}
+        ledgerAccounts={(ledgerAccounts as LedgerAccount[]) ?? []}
         years={years}
       />
 

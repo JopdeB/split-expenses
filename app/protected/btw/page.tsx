@@ -112,10 +112,10 @@ export default async function BtwPage({
                         </td>
                         <td className="p-2 text-right">
                           <a
-                            href={`/api/export/pdf?jaar=${jaar}&kwartaal=${q}`}
+                            href={`/api/export/pdf?jaar=${jaar}&kwartaal=${q}&location=${l.id}`}
                             className="text-xs underline text-muted-foreground hover:text-foreground"
                             download
-                            title={`Download ${q} ${jaar} als PDF`}
+                            title={`Download ${q} ${jaar} ${l.name} als PDF`}
                           >
                             PDF
                           </a>

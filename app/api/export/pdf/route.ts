@@ -86,8 +86,39 @@ export async function GET(req: NextRequest) {
   const kwartaal =
     kwartaalParam && /^Q[1-4]$/.test(kwartaalParam) ? kwartaalParam : null;
 
+  const locationParam = url.searchParams.get("location");
+  const locationId = locationParam ? parseInt(locationParam, 10) : null;
+  if (locationParam && !Number.isFinite(locationId)) {
+    return new NextResponse("Invalid location", { status: 400 });
+  }
+
   const yearStart = `${jaar}-01-01`;
   const yearEnd = `${jaar}-12-31`;
+
+  const locationsQuery = locationId !== null
+    ? supabase.from("locations").select("*").eq("id", locationId)
+    : supabase.from("locations").select("*").order("sort_order");
+  const gbQuery = supabase.from("v_grootboek").select("*").eq("jaar", jaar);
+  const btwQuery = supabase.from("v_btw_quarterly").select("*").eq("jaar", jaar);
+  if (locationId !== null) {
+    gbQuery.eq("location_id", locationId);
+    btwQuery.eq("location_id", locationId);
+  }
+  const txQuery = kwartaal
+    ? (() => {
+        const q = supabase
+          .from("v_transactions")
+          .select("*")
+          .gte("datum", yearStart)
+          .lte("datum", yearEnd)
+          .eq("kwartaal", kwartaal)
+          .order("datum")
+          .order("boekstuk");
+        if (locationId !== null) q.eq("location_id", locationId);
+        return q;
+      })()
+    : Promise.resolve({ data: null, error: null });
+
   const [
     { data: locations, error: locErr },
     { data: ledgerAccounts, error: laErr },
@@ -95,21 +126,11 @@ export async function GET(req: NextRequest) {
     { data: btwData, error: btwErr },
     { data: txData, error: txErr },
   ] = await Promise.all([
-    supabase.from("locations").select("*").order("sort_order"),
+    locationsQuery,
     supabase.from("ledger_accounts").select("*").order("sort_order"),
-    supabase.from("v_grootboek").select("*").eq("jaar", jaar),
-    supabase.from("v_btw_quarterly").select("*").eq("jaar", jaar),
-    // Transactions only fetched if we render quarterly detail
-    kwartaal
-      ? supabase
-          .from("v_transactions")
-          .select("*")
-          .gte("datum", yearStart)
-          .lte("datum", yearEnd)
-          .eq("kwartaal", kwartaal)
-          .order("datum")
-          .order("boekstuk")
-      : Promise.resolve({ data: null, error: null }),
+    gbQuery,
+    btwQuery,
+    txQuery,
   ]);
 
   if (locErr || laErr || gbErr || btwErr || txErr) {
@@ -123,14 +144,19 @@ export async function GET(req: NextRequest) {
   const btw = (btwData ?? []) as BtwRow[];
   const tx = (txData ?? []) as TxRow[] | null;
 
+  const locationName = locationId !== null && locs.length > 0 ? locs[0].name : null;
+
+  const titleBase = kwartaal
+    ? `BTW ${kwartaal} ${jaar}`
+    : `Jaaroverzicht ${jaar}`;
+  const titleWithLocation = locationName ? `${titleBase} — ${locationName}` : titleBase;
+
   const doc = new PDFDocument({
     size: "A4",
     margin: PAGE_MARGIN,
     bufferPages: true, // required for switchToPage / footer pass
     info: {
-      Title: kwartaal
-        ? `BTW ${kwartaal} ${jaar} — Admin Pap & Sjanet`
-        : `Jaaroverzicht ${jaar} — Admin Pap & Sjanet`,
+      Title: `${titleWithLocation} — Admin Pap & Sjanet`,
       Author: "Admin Pap & Sjanet",
     },
   });
@@ -141,7 +167,9 @@ export async function GET(req: NextRequest) {
   // ---------- Title ----------
   doc.font("Helvetica-Bold").fontSize(20);
   doc.text(
-    kwartaal ? `BTW-overzicht ${kwartaal} ${jaar}` : `Jaaroverzicht ${jaar}`,
+    kwartaal
+      ? `BTW-overzicht ${kwartaal} ${jaar}${locationName ? ` — ${locationName}` : ""}`
+      : `Jaaroverzicht ${jaar}${locationName ? ` — ${locationName}` : ""}`,
     PAGE_MARGIN,
     PAGE_MARGIN,
     { width: CONTENT_WIDTH },
@@ -187,9 +215,10 @@ export async function GET(req: NextRequest) {
   doc.end();
   const pdf = await done;
 
+  const locSlug = locationName ? `-${slugify(locationName)}` : "";
   const filename = kwartaal
-    ? `Admin-Pap-Sjanet-${jaar}-${kwartaal}.pdf`
-    : `Admin-Pap-Sjanet-${jaar}.pdf`;
+    ? `Admin-Pap-Sjanet-${jaar}-${kwartaal}${locSlug}.pdf`
+    : `Admin-Pap-Sjanet-${jaar}${locSlug}.pdf`;
   return new NextResponse(pdf as unknown as BodyInit, {
     status: 200,
     headers: {
@@ -511,4 +540,12 @@ function drawCells(
     });
     x += widths[i];
   }
+}
+
+function slugify(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }

@@ -2,14 +2,15 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTransition } from "react";
-import type { Location } from "@/lib/types";
+import type { LedgerAccount, Location } from "@/lib/types";
 
 type Props = {
   locations: Location[];
+  ledgerAccounts: LedgerAccount[];
   years: number[];
 };
 
-export function TransactiesFilters({ locations, years }: Props) {
+export function TransactiesFilters({ locations, ledgerAccounts, years }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -26,6 +27,7 @@ export function TransactiesFilters({ locations, years }: Props) {
 
   const year = params.get("jaar") ?? "all";
   const locId = params.get("location") ?? "all";
+  const ledgerId = params.get("ledger") ?? "all";
   const q = params.get("q") ?? "";
 
   return (
@@ -62,13 +64,29 @@ export function TransactiesFilters({ locations, years }: Props) {
         </select>
       </label>
 
+      <label className="flex flex-col gap-1 text-xs">
+        Grootboek
+        <select
+          value={ledgerId}
+          onChange={(e) => setParam("ledger", e.target.value)}
+          className="h-9 rounded-md border bg-background px-2 text-sm min-w-[180px]"
+        >
+          <option value="all">Alle</option>
+          {ledgerAccounts.map((a) => (
+            <option key={a.id} value={String(a.id)}>
+              {a.code} {a.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="flex flex-col gap-1 text-xs flex-1 min-w-[180px]">
         Zoek
         <input
           type="search"
           defaultValue={q}
           onChange={(e) => setParam("q", e.target.value)}
-          placeholder="omschrijving…"
+          placeholder="omschrijving of grootboek-code…"
           className="h-9 rounded-md border bg-background px-2 text-sm"
         />
       </label>
