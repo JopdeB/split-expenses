@@ -10,9 +10,10 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Skip lint during Docker build — CI/dev already runs it; container build
-# should be about compiling.
 ENV NEXT_TELEMETRY_DISABLED=1
+# Droplet only has ~458 MiB RAM. Give Node explicit permission to spill into
+# swap so the build doesn't hit the default heap ceiling mid-compile.
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 RUN npm run build
 
 # --- runner ---

@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   // deps we actually use. Docker image builds off that, so the final layer
   // stays tiny (~150-200 MB) instead of shipping the full node_modules tree.
   output: "standalone",
+  // The droplet has 512 MiB RAM; the extra TS-check + lint passes push
+  // Node's heap past that. We already run both locally before pushing, so
+  // skipping them inside `docker build` on the droplet is safe.
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
 };
 
 export default nextConfig;
