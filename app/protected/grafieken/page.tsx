@@ -1,9 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
+import { and, desc, gte, lte } from "drizzle-orm";
+
+import { db, tables } from "@/lib/db";
 import { YearFilter } from "@/components/year-filter";
 import { UitgavenPerMaandChart } from "@/components/charts/uitgaven-per-maand";
 import { TopCategorienChart } from "@/components/charts/top-categorien";
 import { InkomstenUitgavenChart } from "@/components/charts/inkomsten-uitgaven";
-import type { TransactionWithRefs } from "@/lib/types";
 
 type SearchParams = { jaar?: string };
 
@@ -17,43 +18,43 @@ export default async function GrafiekenPage({
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
-  const supabase = await createClient();
 
-  // Years available from the data
-  const { data: yearRows } = await supabase
-    .from("v_transactions")
-    .select("jaar");
-  const years = Array.from(
-    new Set(((yearRows ?? []) as Array<{ jaar: number }>).map((r) => r.jaar)),
-  ).sort((a, b) => b - a);
+  // Distinct years — much cheaper than pulling every row.
+  const yearRows = await db
+    .selectDistinct({ jaar: tables.vTransactions.jaar })
+    .from(tables.vTransactions)
+    .orderBy(desc(tables.vTransactions.jaar));
+  const years = yearRows.map((r) => r.jaar);
   if (years.length === 0) years.push(new Date().getFullYear());
 
   const selectedYear = parseInt(sp.jaar ?? "", 10);
   const jaar = Number.isFinite(selectedYear) ? selectedYear : years[0];
 
-  const { data: txData } = await supabase
-    .from("v_transactions")
-    .select("*")
-    .gte("datum", `${jaar}-01-01`)
-    .lte("datum", `${jaar}-12-31`);
-
-  const transactions = (txData as TransactionWithRefs[] | null) ?? [];
+  const transactions = await db
+    .select()
+    .from(tables.vTransactions)
+    .where(
+      and(
+        gte(tables.vTransactions.datum, `${jaar}-01-01`),
+        lte(tables.vTransactions.datum, `${jaar}-12-31`),
+      ),
+    );
 
   // ---- Chart 1: uitgaven per maand per locatie ----
   const locationNames = Array.from(
-    new Set(transactions.map((t) => t.location_name).filter((n): n is string => !!n)),
+    new Set(transactions.map((t) => t.locationName).filter((n): n is string => !!n)),
   ).sort();
   const maandMap = new Map<number, Record<string, number>>();
   for (let m = 0; m < 12; m++) maandMap.set(m, {});
   for (const t of transactions) {
-    const uitN = Number(t.bedrag_uitgaven) || 0;
-    const btwUit = Number(t.btw_uitgaven) || 0;
+    const uitN = Number(t.bedragUitgaven) || 0;
+    const btwUit = Number(t.btwUitgaven) || 0;
     const exclBtw = uitN - btwUit;
     if (exclBtw <= 0) continue;
-    if (!t.location_name) continue;
+    if (!t.locationName) continue;
     const month = new Date(t.datum).getMonth();
     const bucket = maandMap.get(month)!;
-    bucket[t.location_name] = (bucket[t.location_name] ?? 0) + exclBtw;
+    bucket[t.locationName] = (bucket[t.locationName] ?? 0) + exclBtw;
   }
   const uitgavenPerMaand = Array.from(maandMap.entries()).map(([m, perLoc]) => ({
     maand: MAANDEN[m],
@@ -63,12 +64,12 @@ export default async function GrafiekenPage({
   // ---- Chart 2: top kosten-categorieën ----
   const ledgerTotals = new Map<string, number>();
   for (const t of transactions) {
-    const uitN = Number(t.bedrag_uitgaven) || 0;
-    const btwUit = Number(t.btw_uitgaven) || 0;
+    const uitN = Number(t.bedragUitgaven) || 0;
+    const btwUit = Number(t.btwUitgaven) || 0;
     const exclBtw = uitN - btwUit;
     if (exclBtw <= 0) continue;
-    const label = t.ledger_code
-      ? `${t.ledger_code} ${t.ledger_name ?? ""}`.trim()
+    const label = t.ledgerCode
+      ? `${t.ledgerCode} ${t.ledgerName ?? ""}`.trim()
       : "— Geen grootboek —";
     ledgerTotals.set(label, (ledgerTotals.get(label) ?? 0) + exclBtw);
   }
@@ -84,9 +85,9 @@ export default async function GrafiekenPage({
     if (!t.kwartaal) continue;
     const bucket = kwartaalMap.get(t.kwartaal);
     if (!bucket) continue;
-    bucket.inkomsten += (Number(t.bedrag_inkomsten) || 0) - (Number(t.btw_inkomsten) || 0);
-    bucket.uitgaven += (Number(t.bedrag_uitgaven) || 0) - (Number(t.btw_uitgaven) || 0);
-    bucket.deeluitgaven += (Number(t.bedrag_deeluitgaven) || 0) - (Number(t.btw_deeluitgaven) || 0);
+    bucket.inkomsten += (Number(t.bedragInkomsten) || 0) - (Number(t.btwInkomsten) || 0);
+    bucket.uitgaven += (Number(t.bedragUitgaven) || 0) - (Number(t.btwUitgaven) || 0);
+    bucket.deeluitgaven += (Number(t.bedragDeeluitgaven) || 0) - (Number(t.btwDeeluitgaven) || 0);
   }
   const inkomstenUitgaven = Array.from(kwartaalMap.entries()).map(([kwartaal, v]) => ({
     kwartaal,
