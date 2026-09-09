@@ -9,28 +9,16 @@ export type SessionData = {
 
 export const SESSION_COOKIE = "admin_pap_session";
 
-export const sessionOptions: SessionOptions = {
-  password: getSessionSecret(),
-  cookieName: SESSION_COOKIE,
-  cookieOptions: {
-    httpOnly: true,
-    sameSite: "lax",
-    // Secure automatically only in production so `next dev` on http works.
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    // 30 dagen — deze app zien de gebruikers een paar keer per maand,
-    // langer inloggen scheelt gedoe.
-    maxAge: 60 * 60 * 24 * 30,
-  },
-};
-
-function getSessionSecret(): string {
+// NB: intentionally not resolving SESSION_SECRET at module load. Next's
+// build-time page-data collector imports this module in a "production" Node
+// process without runtime env vars, and throwing there breaks the build.
+// The password is read lazily via getSessionOptions() on the request path.
+export function getSessionSecret(): string {
   const s = process.env.SESSION_SECRET;
   if (!s) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("SESSION_SECRET must be set in production");
     }
-    // Dev fallback so `next build` doesn't blow up before the env is set.
     return "dev-only-fallback-secret-please-set-a-real-one-in-env-local";
   }
   if (s.length < 32) {
@@ -39,7 +27,20 @@ function getSessionSecret(): string {
   return s;
 }
 
-/** Read the session from cookies (server components / server actions / route handlers). */
+export function getSessionOptions(): SessionOptions {
+  return {
+    password: getSessionSecret(),
+    cookieName: SESSION_COOKIE,
+    cookieOptions: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30, // 30 dagen
+    },
+  };
+}
+
 export async function getSession() {
-  return getIronSession<SessionData>(await cookies(), sessionOptions);
+  return getIronSession<SessionData>(await cookies(), getSessionOptions());
 }

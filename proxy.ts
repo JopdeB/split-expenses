@@ -1,13 +1,13 @@
 import { unsealData } from "iron-session";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { SESSION_COOKIE, type SessionData, sessionOptions } from "@/lib/session";
+import { SESSION_COOKIE, type SessionData, getSessionSecret } from "@/lib/session";
 
 async function isAuthenticated(req: NextRequest): Promise<boolean> {
   const raw = req.cookies.get(SESSION_COOKIE)?.value;
   if (!raw) return false;
   try {
-    const data = await unsealData<SessionData>(raw, { password: sessionOptions.password });
+    const data = await unsealData<SessionData>(raw, { password: getSessionSecret() });
     return !!data.userId;
   } catch {
     return false;

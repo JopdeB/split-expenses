@@ -14,7 +14,6 @@ const nextConfig: NextConfig = {
   // Node's heap past that. We already run both locally before pushing, so
   // skipping them inside `docker build` on the droplet is safe.
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
 };
 
 export default nextConfig;
