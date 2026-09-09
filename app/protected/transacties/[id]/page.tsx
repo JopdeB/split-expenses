@@ -1,14 +1,9 @@
 import { notFound } from "next/navigation";
+import { asc, eq } from "drizzle-orm";
 
-import { createClient } from "@/lib/supabase/server";
+import { db, tables } from "@/lib/db";
 import { TransactieForm } from "@/components/transactie-form";
 import { updateTransaction } from "@/lib/actions";
-import type {
-  BtwCode,
-  LedgerAccount,
-  Location,
-  Transaction,
-} from "@/lib/types";
 import { fetchNextBoekstukMap } from "@/lib/next-boekstuk";
 
 export default async function EditTransactiePage({
@@ -20,16 +15,15 @@ export default async function EditTransactiePage({
   const txId = parseInt(id, 10);
   if (!Number.isFinite(txId)) notFound();
 
-  const supabase = await createClient();
-  const [{ data: tx }, { data: locations }, { data: ledgerAccounts }, { data: btwCodes }, nextBoekstukMap] =
-    await Promise.all([
-      supabase.from("transactions").select("*").eq("id", txId).single(),
-      supabase.from("locations").select("*").order("sort_order"),
-      supabase.from("ledger_accounts").select("*").order("sort_order"),
-      supabase.from("btw_codes").select("*").order("sort_order"),
-      fetchNextBoekstukMap(supabase),
-    ]);
+  const [txRows, locations, ledgerAccounts, btwCodes, nextBoekstukMap] = await Promise.all([
+    db.select().from(tables.transactions).where(eq(tables.transactions.id, txId)).limit(1),
+    db.select().from(tables.locations).orderBy(asc(tables.locations.sortOrder)),
+    db.select().from(tables.ledgerAccounts).orderBy(asc(tables.ledgerAccounts.sortOrder)),
+    db.select().from(tables.btwCodes).orderBy(asc(tables.btwCodes.sortOrder)),
+    fetchNextBoekstukMap(),
+  ]);
 
+  const tx = txRows[0];
   if (!tx) notFound();
 
   const updateWithId = updateTransaction.bind(null, txId);
@@ -39,11 +33,11 @@ export default async function EditTransactiePage({
       <h1 className="text-2xl font-bold">Transactie bewerken</h1>
       <TransactieForm
         action={updateWithId}
-        locations={(locations as Location[]) ?? []}
-        ledgerAccounts={(ledgerAccounts as LedgerAccount[]) ?? []}
-        btwCodes={(btwCodes as BtwCode[]) ?? []}
+        locations={locations}
+        ledgerAccounts={ledgerAccounts}
+        btwCodes={btwCodes}
         nextBoekstukMap={nextBoekstukMap}
-        initial={tx as Transaction}
+        initial={tx}
         submitLabel="Bijwerken"
       />
     </>

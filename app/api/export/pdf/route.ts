@@ -1,55 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
+import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { createClient } from "@/lib/supabase/server";
+import { db, tables } from "@/lib/db";
+import type {
+  BtwQuarterRow as BtwRow,
+  GrootboekRow as GbRow,
+  LedgerAccount,
+  Location,
+  TransactionWithRefs as TxRow,
+} from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type Location = { id: number; name: string; sort_order: number };
-type LedgerAccount = { id: number; code: string; name: string; sort_order: number };
-
-type GbRow = {
-  jaar: number;
-  location_id: number;
-  location_name: string;
-  ledger_account_id: number;
-  ledger_code: string;
-  ledger_name: string;
-  inkomsten: number;
-  uitgaven: number;
-  deeluitgaven: number;
-  netto: number;
-};
-
-type BtwRow = {
-  location_id: number;
-  location_name: string;
-  jaar: number;
-  kwartaal: string;
-  btw_inkomsten: number;
-  btw_uitgaven: number;
-  btw_netto: number;
-};
-
-type TxRow = {
-  id: number;
-  location_id: number;
-  location_name: string;
-  ledger_code: string | null;
-  ledger_name: string | null;
-  btw_label: string | null;
-  boekstuk: number | null;
-  datum: string;
-  kwartaal: string;
-  bedrag_inkomsten: number;
-  btw_inkomsten: number;
-  bedrag_uitgaven: number;
-  btw_uitgaven: number;
-  bedrag_deeluitgaven: number;
-  btw_deeluitgaven: number;
-  omschrijving: string | null;
-};
 
 const nlNumber = new Intl.NumberFormat("nl-NL", {
   minimumFractionDigits: 2,
@@ -95,54 +59,40 @@ export async function GET(req: NextRequest) {
   const yearStart = `${jaar}-01-01`;
   const yearEnd = `${jaar}-12-31`;
 
-  const locationsQuery = locationId !== null
-    ? supabase.from("locations").select("*").eq("id", locationId)
-    : supabase.from("locations").select("*").order("sort_order");
-  const gbQuery = supabase.from("v_grootboek").select("*").eq("jaar", jaar);
-  const btwQuery = supabase.from("v_btw_quarterly").select("*").eq("jaar", jaar);
+  const locsPromise = locationId !== null
+    ? db.select().from(tables.locations).where(eq(tables.locations.id, locationId))
+    : db.select().from(tables.locations).orderBy(asc(tables.locations.sortOrder));
+
+  const gbFilters: SQL[] = [eq(tables.vGrootboek.jaar, jaar)];
+  const btwFilters: SQL[] = [eq(tables.vBtwQuarterly.jaar, jaar)];
   if (locationId !== null) {
-    gbQuery.eq("location_id", locationId);
-    btwQuery.eq("location_id", locationId);
+    gbFilters.push(eq(tables.vGrootboek.locationId, locationId));
+    btwFilters.push(eq(tables.vBtwQuarterly.locationId, locationId));
   }
-  const txQuery = kwartaal
+
+  const txPromise = kwartaal
     ? (() => {
-        const q = supabase
-          .from("v_transactions")
-          .select("*")
-          .gte("datum", yearStart)
-          .lte("datum", yearEnd)
-          .eq("kwartaal", kwartaal)
-          .order("datum")
-          .order("boekstuk");
-        if (locationId !== null) q.eq("location_id", locationId);
-        return q;
+        const filters: SQL[] = [
+          gte(tables.vTransactions.datum, yearStart),
+          lte(tables.vTransactions.datum, yearEnd),
+          eq(tables.vTransactions.kwartaal, kwartaal),
+        ];
+        if (locationId !== null) filters.push(eq(tables.vTransactions.locationId, locationId));
+        return db
+          .select()
+          .from(tables.vTransactions)
+          .where(and(...filters))
+          .orderBy(asc(tables.vTransactions.datum), asc(tables.vTransactions.boekstuk));
       })()
-    : Promise.resolve({ data: null, error: null });
+    : Promise.resolve<TxRow[]>([]);
 
-  const [
-    { data: locations, error: locErr },
-    { data: ledgerAccounts, error: laErr },
-    { data: gbData, error: gbErr },
-    { data: btwData, error: btwErr },
-    { data: txData, error: txErr },
-  ] = await Promise.all([
-    locationsQuery,
-    supabase.from("ledger_accounts").select("*").order("sort_order"),
-    gbQuery,
-    btwQuery,
-    txQuery,
+  const [locs, accounts, gb, btw, tx] = await Promise.all([
+    locsPromise,
+    db.select().from(tables.ledgerAccounts).orderBy(asc(tables.ledgerAccounts.sortOrder)),
+    db.select().from(tables.vGrootboek).where(and(...gbFilters)),
+    db.select().from(tables.vBtwQuarterly).where(and(...btwFilters)),
+    txPromise,
   ]);
-
-  if (locErr || laErr || gbErr || btwErr || txErr) {
-    console.error("pdf export query error", { locErr, laErr, gbErr, btwErr, txErr });
-    return new NextResponse("Database error", { status: 500 });
-  }
-
-  const locs = (locations ?? []) as Location[];
-  const accounts = (ledgerAccounts ?? []) as LedgerAccount[];
-  const gb = (gbData ?? []) as GbRow[];
-  const btw = (btwData ?? []) as BtwRow[];
-  const tx = (txData ?? []) as TxRow[] | null;
 
   const locationName = locationId !== null && locs.length > 0 ? locs[0].name : null;
 
@@ -244,12 +194,12 @@ function renderYearly(args: {
   // ledgerId -> locationId -> row
   const gbLookup = new Map<number, Map<number, GbRow>>();
   for (const r of gb) {
-    let perLoc = gbLookup.get(r.ledger_account_id);
+    let perLoc = gbLookup.get(r.ledgerAccountId);
     if (!perLoc) {
       perLoc = new Map();
-      gbLookup.set(r.ledger_account_id, perLoc);
+      gbLookup.set(r.ledgerAccountId, perLoc);
     }
-    perLoc.set(r.location_id, r);
+    perLoc.set(r.locationId, r);
   }
 
   const widths = [195, 80, 80, 88, 80]; // sum = 523
@@ -297,7 +247,7 @@ function renderYearly(args: {
   const btwWidths = [70, 145, 145, 163]; // sum = 523
   for (const loc of locs) {
     const perLoc = btw
-      .filter((r) => r.location_id === loc.id)
+      .filter((r) => r.locationId === loc.id)
       .sort((a, b) => a.kwartaal.localeCompare(b.kwartaal));
     if (perLoc.length === 0) continue;
 
@@ -306,9 +256,9 @@ function renderYearly(args: {
     const rows: string[][] = [];
     let tIn = 0, tUit = 0, tNet = 0;
     for (const r of perLoc) {
-      const inN = Number(r.btw_inkomsten) || 0;
-      const uitN = Number(r.btw_uitgaven) || 0;
-      const netN = Number(r.btw_netto) || 0;
+      const inN = Number(r.btwInkomsten) || 0;
+      const uitN = Number(r.btwUitgaven) || 0;
+      const netN = Number(r.btwNetto) || 0;
       tIn += inN; tUit += uitN; tNet += netN;
       rows.push([r.kwartaal, euro(inN), euro(uitN), euro(netN)]);
     }
@@ -347,10 +297,10 @@ function renderQuarterly(args: {
   const sumRows: string[][] = [];
   let gIn = 0, gUit = 0, gNet = 0;
   for (const loc of locs) {
-    const r = btw.find((b) => b.location_id === loc.id && b.kwartaal === kwartaal);
-    const inN = r ? Number(r.btw_inkomsten) || 0 : 0;
-    const uitN = r ? Number(r.btw_uitgaven) || 0 : 0;
-    const netN = r ? Number(r.btw_netto) || 0 : 0;
+    const r = btw.find((b) => b.locationId === loc.id && b.kwartaal === kwartaal);
+    const inN = r ? Number(r.btwInkomsten) || 0 : 0;
+    const uitN = r ? Number(r.btwUitgaven) || 0 : 0;
+    const netN = r ? Number(r.btwNetto) || 0 : 0;
     gIn += inN; gUit += uitN; gNet += netN;
     sumRows.push([loc.name, euro(inN), euro(uitN), euro(netN)]);
   }
@@ -364,7 +314,7 @@ function renderQuarterly(args: {
 
   // Transactions in this quarter, grouped per location
   for (const loc of locs) {
-    const locTx = tx.filter((t) => t.location_id === loc.id);
+    const locTx = tx.filter((t) => t.locationId === loc.id);
     if (locTx.length === 0) continue;
 
     if (doc.y > PAGE_BOTTOM - 80) doc.addPage();
@@ -374,27 +324,27 @@ function renderQuarterly(args: {
     const txWidths = [55, 35, 175, 65, 96, 97]; // sum = 523
     const rows: string[][] = [];
     for (const t of locTx) {
-      const grootboek = t.ledger_code
-        ? `${t.ledger_code} ${t.ledger_name ?? ""}`.trim()
+      const grootboek = t.ledgerCode
+        ? `${t.ledgerCode} ${t.ledgerName ?? ""}`.trim()
         : "—";
       // Combine inkomsten/uitgaven/deeluitgaven into one signed bedrag + label
       let bedrag = 0;
       let btwTotal = 0;
-      if (Number(t.bedrag_inkomsten)) {
-        bedrag = Number(t.bedrag_inkomsten);
-        btwTotal = Number(t.btw_inkomsten) || 0;
-      } else if (Number(t.bedrag_uitgaven)) {
-        bedrag = -Number(t.bedrag_uitgaven);
-        btwTotal = -(Number(t.btw_uitgaven) || 0);
-      } else if (Number(t.bedrag_deeluitgaven)) {
-        bedrag = -Number(t.bedrag_deeluitgaven);
-        btwTotal = -(Number(t.btw_deeluitgaven) || 0);
+      if (Number(t.bedragInkomsten)) {
+        bedrag = Number(t.bedragInkomsten);
+        btwTotal = Number(t.btwInkomsten) || 0;
+      } else if (Number(t.bedragUitgaven)) {
+        bedrag = -Number(t.bedragUitgaven);
+        btwTotal = -(Number(t.btwUitgaven) || 0);
+      } else if (Number(t.bedragDeeluitgaven)) {
+        bedrag = -Number(t.bedragDeeluitgaven);
+        btwTotal = -(Number(t.btwDeeluitgaven) || 0);
       }
       rows.push([
         formatDateNL(t.datum),
         t.boekstuk ? String(t.boekstuk) : "—",
         truncate(grootboek, 32),
-        t.btw_label ?? "—",
+        t.btwLabel ?? "—",
         euro(bedrag),
         euro(btwTotal),
       ]);

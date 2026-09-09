@@ -1,32 +1,51 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { desc } from "drizzle-orm";
 
 import { createClient } from "@/lib/supabase/server";
+import { db, tables } from "@/lib/db";
 import { formatEuro } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProtectedPage() {
+  // Auth check still via Supabase — switches to iron-session later in the
+  // migration. Data queries have already moved to Drizzle.
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   if (!claims?.claims) redirect("/auth/login");
 
-  const { data: btw } = await supabase
-    .from("v_btw_quarterly")
-    .select("jaar, btw_inkomsten, btw_uitgaven, btw_netto");
-
-  const { data: latest } = await supabase
-    .from("v_transactions")
-    .select("id, datum, location_name, omschrijving, bedrag_inkomsten, bedrag_uitgaven")
-    .order("datum", { ascending: false })
-    .limit(5);
+  const [btw, latest] = await Promise.all([
+    db
+      .select({
+        jaar: tables.vBtwQuarterly.jaar,
+        btwInkomsten: tables.vBtwQuarterly.btwInkomsten,
+        btwUitgaven: tables.vBtwQuarterly.btwUitgaven,
+        btwNetto: tables.vBtwQuarterly.btwNetto,
+      })
+      .from(tables.vBtwQuarterly),
+    db
+      .select({
+        id: tables.vTransactions.id,
+        datum: tables.vTransactions.datum,
+        locationName: tables.vTransactions.locationName,
+        omschrijving: tables.vTransactions.omschrijving,
+        bedragInkomsten: tables.vTransactions.bedragInkomsten,
+        bedragUitgaven: tables.vTransactions.bedragUitgaven,
+      })
+      .from(tables.vTransactions)
+      .orderBy(desc(tables.vTransactions.datum))
+      .limit(5),
+  ]);
 
   const yearTotals = new Map<number, { in: number; uit: number; net: number }>();
-  for (const r of btw ?? []) {
+  for (const r of btw) {
     const prev = yearTotals.get(r.jaar) ?? { in: 0, uit: 0, net: 0 };
-    prev.in += Number(r.btw_inkomsten) || 0;
-    prev.uit += Number(r.btw_uitgaven) || 0;
-    prev.net += Number(r.btw_netto) || 0;
+    prev.in += Number(r.btwInkomsten) || 0;
+    prev.uit += Number(r.btwUitgaven) || 0;
+    prev.net += Number(r.btwNetto) || 0;
     yearTotals.set(r.jaar, prev);
   }
   const years = Array.from(yearTotals.keys()).sort((a, b) => b - a);
@@ -89,30 +108,30 @@ export default async function ProtectedPage() {
           Laatste transacties
         </h2>
         <div className="border rounded-md">
-          {(latest ?? []).length === 0 ? (
+          {latest.length === 0 ? (
             <p className="text-sm text-muted-foreground p-4">
               Geen transacties gevonden.
             </p>
           ) : (
             <table className="w-full text-sm">
               <tbody>
-                {(latest ?? []).map((t) => (
+                {latest.map((t) => (
                   <tr key={t.id} className="border-b last:border-b-0">
                     <td className="p-2 text-muted-foreground whitespace-nowrap">
                       {new Date(t.datum).toLocaleDateString("nl-NL")}
                     </td>
-                    <td className="p-2">{t.location_name}</td>
+                    <td className="p-2">{t.locationName}</td>
                     <td className="p-2 max-w-md truncate">
                       {t.omschrijving}
                     </td>
                     <td className="p-2 text-right">
-                      {Number(t.bedrag_inkomsten) > 0
-                        ? formatEuro(t.bedrag_inkomsten)
+                      {Number(t.bedragInkomsten) > 0
+                        ? formatEuro(t.bedragInkomsten)
                         : ""}
                     </td>
                     <td className="p-2 text-right text-red-700">
-                      {Number(t.bedrag_uitgaven) > 0
-                        ? "− " + formatEuro(t.bedrag_uitgaven)
+                      {Number(t.bedragUitgaven) > 0
+                        ? "− " + formatEuro(t.bedragUitgaven)
                         : ""}
                     </td>
                   </tr>

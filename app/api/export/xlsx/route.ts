@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
+import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
 
 import { createClient } from "@/lib/supabase/server";
+import { db, tables } from "@/lib/db";
 
 // Node runtime needed for exceljs streams + Buffer.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  // Auth is still Supabase during the migration; only the data queries have
+  // moved to Drizzle.
   const supabase = await createClient();
-
-  // Auth check — the page that links here is behind /protected, but enforce
-  // server-side anyway in case someone hits the URL directly.
   const { data: userResp } = await supabase.auth.getUser();
   if (!userResp?.user) {
     return new NextResponse("Unauthorized", { status: 401 });
@@ -33,38 +34,36 @@ export async function GET(req: NextRequest) {
   const yearStart = `${jaar}-01-01`;
   const yearEnd = `${jaar}-12-31`;
 
-  const txQuery = supabase
-    .from("v_transactions")
-    .select("*")
-    .gte("datum", yearStart)
-    .lte("datum", yearEnd)
-    .order("datum")
-    .order("boekstuk");
-  const gbQuery = supabase.from("v_grootboek").select("*").eq("jaar", jaar);
-  const btwQuery = supabase.from("v_btw_quarterly").select("*").eq("jaar", jaar);
+  const txFilters: SQL[] = [
+    gte(tables.vTransactions.datum, yearStart),
+    lte(tables.vTransactions.datum, yearEnd),
+  ];
+  const gbFilters: SQL[] = [eq(tables.vGrootboek.jaar, jaar)];
+  const btwFilters: SQL[] = [eq(tables.vBtwQuarterly.jaar, jaar)];
   if (locationId !== null) {
-    txQuery.eq("location_id", locationId);
-    gbQuery.eq("location_id", locationId);
-    btwQuery.eq("location_id", locationId);
+    txFilters.push(eq(tables.vTransactions.locationId, locationId));
+    gbFilters.push(eq(tables.vGrootboek.locationId, locationId));
+    btwFilters.push(eq(tables.vBtwQuarterly.locationId, locationId));
   }
 
-  const locationLookupPromise = locationId !== null
-    ? supabase.from("locations").select("name").eq("id", locationId).single()
-    : Promise.resolve({ data: null, error: null });
+  const [transactions, grootboek, btw, locationRows] = await Promise.all([
+    db
+      .select()
+      .from(tables.vTransactions)
+      .where(and(...txFilters))
+      .orderBy(asc(tables.vTransactions.datum), asc(tables.vTransactions.boekstuk)),
+    db.select().from(tables.vGrootboek).where(and(...gbFilters)),
+    db.select().from(tables.vBtwQuarterly).where(and(...btwFilters)),
+    locationId !== null
+      ? db
+          .select({ name: tables.locations.name })
+          .from(tables.locations)
+          .where(eq(tables.locations.id, locationId))
+          .limit(1)
+      : Promise.resolve([] as Array<{ name: string }>),
+  ]);
 
-  const [
-    { data: transactions, error: txErr },
-    { data: grootboek, error: gbErr },
-    { data: btw, error: btwErr },
-    { data: locationRow },
-  ] = await Promise.all([txQuery, gbQuery, btwQuery, locationLookupPromise]);
-
-  if (txErr || gbErr || btwErr) {
-    console.error("xlsx export query error", { txErr, gbErr, btwErr });
-    return new NextResponse("Database error", { status: 500 });
-  }
-
-  const locationName = (locationRow as { name?: string } | null)?.name ?? null;
+  const locationName = locationRows[0]?.name ?? null;
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "Admin Pap & Sjanet";
@@ -88,19 +87,19 @@ export async function GET(req: NextRequest) {
   ];
   styleHeader(txSheet);
 
-  for (const t of (transactions ?? []) as Array<Record<string, unknown>>) {
+  for (const t of transactions) {
     txSheet.addRow({
-      datum: t.datum ? new Date(t.datum as string) : null,
-      location_name: t.location_name,
+      datum: t.datum ? new Date(t.datum) : null,
+      location_name: t.locationName,
       boekstuk: t.boekstuk,
-      grootboek: t.ledger_code ? `${t.ledger_code} ${t.ledger_name ?? ""}`.trim() : "",
-      btw_label: t.btw_label ?? "",
-      bedrag_inkomsten: numOrNull(t.bedrag_inkomsten),
-      btw_inkomsten: numOrNull(t.btw_inkomsten),
-      bedrag_uitgaven: numOrNull(t.bedrag_uitgaven),
-      btw_uitgaven: numOrNull(t.btw_uitgaven),
-      bedrag_deeluitgaven: numOrNull(t.bedrag_deeluitgaven),
-      btw_deeluitgaven: numOrNull(t.btw_deeluitgaven),
+      grootboek: t.ledgerCode ? `${t.ledgerCode} ${t.ledgerName ?? ""}`.trim() : "",
+      btw_label: t.btwLabel ?? "",
+      bedrag_inkomsten: numOrNull(t.bedragInkomsten),
+      btw_inkomsten: numOrNull(t.btwInkomsten),
+      bedrag_uitgaven: numOrNull(t.bedragUitgaven),
+      btw_uitgaven: numOrNull(t.btwUitgaven),
+      bedrag_deeluitgaven: numOrNull(t.bedragDeeluitgaven),
+      btw_deeluitgaven: numOrNull(t.btwDeeluitgaven),
       omschrijving: t.omschrijving ?? "",
     });
   }
@@ -120,11 +119,11 @@ export async function GET(req: NextRequest) {
   ];
   styleHeader(gbSheet);
 
-  for (const r of (grootboek ?? []) as Array<Record<string, unknown>>) {
+  for (const r of grootboek) {
     gbSheet.addRow({
-      code: r.ledger_code,
-      name: r.ledger_name,
-      location: r.location_name,
+      code: r.ledgerCode,
+      name: r.ledgerName,
+      location: r.locationName,
       inkomsten: numOrNull(r.inkomsten),
       uitgaven: numOrNull(r.uitgaven),
       deeluitgaven: numOrNull(r.deeluitgaven),
@@ -144,19 +143,19 @@ export async function GET(req: NextRequest) {
   ];
   styleHeader(btwSheet);
 
-  const btwRows = ((btw ?? []) as Array<Record<string, unknown>>).slice().sort((a, b) => {
-    const al = String(a.location_name);
-    const bl = String(b.location_name);
+  const btwRows = btw.slice().sort((a, b) => {
+    const al = String(a.locationName ?? "");
+    const bl = String(b.locationName ?? "");
     if (al !== bl) return al.localeCompare(bl);
     return String(a.kwartaal).localeCompare(String(b.kwartaal));
   });
   for (const r of btwRows) {
     btwSheet.addRow({
-      location: r.location_name,
+      location: r.locationName,
       kwartaal: r.kwartaal,
-      btw_inkomsten: numOrNull(r.btw_inkomsten),
-      btw_uitgaven: numOrNull(r.btw_uitgaven),
-      btw_netto: numOrNull(r.btw_netto),
+      btw_inkomsten: numOrNull(r.btwInkomsten),
+      btw_uitgaven: numOrNull(r.btwUitgaven),
+      btw_netto: numOrNull(r.btwNetto),
     });
   }
   btwSheet.views = [{ state: "frozen", ySplit: 1 }];

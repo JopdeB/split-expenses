@@ -1,28 +1,30 @@
-import { createClient } from "@/lib/supabase/server";
+import { asc } from "drizzle-orm";
+
+import { db, tables } from "@/lib/db";
 import { TransactieForm } from "@/components/transactie-form";
 import { createTransaction } from "@/lib/actions";
-import type { BtwCode, LedgerAccount, Location } from "@/lib/types";
 import { fetchNextBoekstukMap } from "@/lib/next-boekstuk";
 
-export default async function NieuweTransactiePage() {
-  const supabase = await createClient();
+// Read from the live DB, never prerender at build time (build has no
+// tunnel).
+export const dynamic = "force-dynamic";
 
-  const [{ data: locations }, { data: ledgerAccounts }, { data: btwCodes }, nextBoekstukMap] =
-    await Promise.all([
-      supabase.from("locations").select("*").order("sort_order"),
-      supabase.from("ledger_accounts").select("*").order("sort_order"),
-      supabase.from("btw_codes").select("*").order("sort_order"),
-      fetchNextBoekstukMap(supabase),
-    ]);
+export default async function NieuweTransactiePage() {
+  const [locations, ledgerAccounts, btwCodes, nextBoekstukMap] = await Promise.all([
+    db.select().from(tables.locations).orderBy(asc(tables.locations.sortOrder)),
+    db.select().from(tables.ledgerAccounts).orderBy(asc(tables.ledgerAccounts.sortOrder)),
+    db.select().from(tables.btwCodes).orderBy(asc(tables.btwCodes.sortOrder)),
+    fetchNextBoekstukMap(),
+  ]);
 
   return (
     <>
       <h1 className="text-2xl font-bold">Nieuwe transactie</h1>
       <TransactieForm
         action={createTransaction}
-        locations={(locations as Location[]) ?? []}
-        ledgerAccounts={(ledgerAccounts as LedgerAccount[]) ?? []}
-        btwCodes={(btwCodes as BtwCode[]) ?? []}
+        locations={locations}
+        ledgerAccounts={ledgerAccounts}
+        btwCodes={btwCodes}
         nextBoekstukMap={nextBoekstukMap}
         submitLabel="Opslaan"
       />

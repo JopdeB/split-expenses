@@ -16,3 +16,4 @@ export type TransactionWithRefs = typeof schema.vTransactions.$inferSelect;
 export type GrootboekRow = typeof schema.vGrootboek.$inferSelect;
 export type BtwQuarterRow = typeof schema.vBtwQuarterly.$inferSelect;
 export type User = InferSelectModel<typeof schema.users>;
+export type AuditRow = InferSelectModel<typeof schema.auditLog>;
