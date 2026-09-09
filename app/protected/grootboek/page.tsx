@@ -1,7 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
+import { asc, desc, eq } from "drizzle-orm";
+
+import { db, tables } from "@/lib/db";
 import { formatEuro } from "@/lib/format";
 import { YearFilter } from "@/components/year-filter";
-import type { GrootboekRow, LedgerAccount, Location } from "@/lib/types";
 
 type SearchParams = { jaar?: string };
 
@@ -11,39 +12,36 @@ export default async function GrootboekPage({
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
-  const supabase = await createClient();
 
-  const [{ data: locations }, { data: ledgerAccounts }, { data: yearRows }] =
-    await Promise.all([
-      supabase.from("locations").select("*").order("sort_order"),
-      supabase.from("ledger_accounts").select("*").order("sort_order"),
-      supabase.from("v_grootboek").select("jaar"),
-    ]);
+  const [locs, accounts, yearRows] = await Promise.all([
+    db.select().from(tables.locations).orderBy(asc(tables.locations.sortOrder)),
+    db.select().from(tables.ledgerAccounts).orderBy(asc(tables.ledgerAccounts.sortOrder)),
+    db
+      .selectDistinct({ jaar: tables.vGrootboek.jaar })
+      .from(tables.vGrootboek)
+      .orderBy(desc(tables.vGrootboek.jaar)),
+  ]);
 
-  const locs = (locations as Location[]) ?? [];
-  const accounts = (ledgerAccounts as LedgerAccount[]) ?? [];
-  const years = Array.from(
-    new Set((yearRows ?? []).map((r) => r.jaar as number))
-  ).sort((a, b) => b - a);
+  const years = yearRows.map((r) => r.jaar);
   if (years.length === 0) years.push(new Date().getFullYear());
 
   const selectedYear = parseInt(sp.jaar ?? "", 10);
   const jaar = Number.isFinite(selectedYear) ? selectedYear : years[0];
 
-  const { data: rows } = await supabase
-    .from("v_grootboek")
-    .select("*")
-    .eq("jaar", jaar);
+  const rows = await db
+    .select()
+    .from(tables.vGrootboek)
+    .where(eq(tables.vGrootboek.jaar, jaar));
 
   // Build lookup: ledgerId -> locationId -> {in, uit, deel, netto}
   const lookup = new Map<number, Map<number, { in: number; uit: number; deel: number; net: number }>>();
-  for (const r of (rows as GrootboekRow[] | null) ?? []) {
-    let perLoc = lookup.get(r.ledger_account_id);
+  for (const r of rows) {
+    let perLoc = lookup.get(r.ledgerAccountId);
     if (!perLoc) {
       perLoc = new Map();
-      lookup.set(r.ledger_account_id, perLoc);
+      lookup.set(r.ledgerAccountId, perLoc);
     }
-    perLoc.set(r.location_id, {
+    perLoc.set(r.locationId, {
       in: Number(r.inkomsten) || 0,
       uit: Number(r.uitgaven) || 0,
       deel: Number(r.deeluitgaven) || 0,

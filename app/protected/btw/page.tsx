@@ -1,7 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
+import { asc, desc, eq } from "drizzle-orm";
+
+import { db, tables } from "@/lib/db";
 import { formatEuro } from "@/lib/format";
 import { YearFilter } from "@/components/year-filter";
-import type { BtwQuarterRow, Location } from "@/lib/types";
 
 type SearchParams = { jaar?: string };
 
@@ -13,42 +14,41 @@ export default async function BtwPage({
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
-  const supabase = await createClient();
 
-  const [{ data: locations }, { data: yearRows }] = await Promise.all([
-    supabase.from("locations").select("*").order("sort_order"),
-    supabase.from("v_btw_quarterly").select("jaar"),
+  const [locs, yearRows] = await Promise.all([
+    db.select().from(tables.locations).orderBy(asc(tables.locations.sortOrder)),
+    db
+      .selectDistinct({ jaar: tables.vBtwQuarterly.jaar })
+      .from(tables.vBtwQuarterly)
+      .orderBy(desc(tables.vBtwQuarterly.jaar)),
   ]);
 
-  const locs = (locations as Location[]) ?? [];
-  const years = Array.from(
-    new Set((yearRows ?? []).map((r) => r.jaar as number))
-  ).sort((a, b) => b - a);
+  const years = yearRows.map((r) => r.jaar);
   if (years.length === 0) years.push(new Date().getFullYear());
 
   const selectedYear = parseInt(sp.jaar ?? "", 10);
   const jaar = Number.isFinite(selectedYear) ? selectedYear : years[0];
 
-  const { data: rows } = await supabase
-    .from("v_btw_quarterly")
-    .select("*")
-    .eq("jaar", jaar);
+  const rows = await db
+    .select()
+    .from(tables.vBtwQuarterly)
+    .where(eq(tables.vBtwQuarterly.jaar, jaar));
 
   // Build lookup: locationId -> quarter -> {in, uit, net}
   const lookup = new Map<
     number,
     Map<string, { in: number; uit: number; net: number }>
   >();
-  for (const r of (rows as BtwQuarterRow[] | null) ?? []) {
-    let perQ = lookup.get(r.location_id);
+  for (const r of rows) {
+    let perQ = lookup.get(r.locationId);
     if (!perQ) {
       perQ = new Map();
-      lookup.set(r.location_id, perQ);
+      lookup.set(r.locationId, perQ);
     }
     perQ.set(r.kwartaal, {
-      in: Number(r.btw_inkomsten) || 0,
-      uit: Number(r.btw_uitgaven) || 0,
-      net: Number(r.btw_netto) || 0,
+      in: Number(r.btwInkomsten) || 0,
+      uit: Number(r.btwUitgaven) || 0,
+      net: Number(r.btwNetto) || 0,
     });
   }
 

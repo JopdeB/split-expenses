@@ -17,10 +17,11 @@ type Props = {
   submitLabel: string;
 };
 
-function fmtDecimal(n: number | null | undefined): string {
-  if (n === null || n === undefined) return "";
-  if (n === 0) return "";
-  return n.toString().replace(".", ",");
+function fmtDecimal(n: number | string | null | undefined): string {
+  if (n === null || n === undefined || n === "") return "";
+  const num = typeof n === "string" ? parseFloat(n) : n;
+  if (!Number.isFinite(num) || num === 0) return "";
+  return num.toString().replace(".", ",");
 }
 
 function parseDecimal(s: string): number {
@@ -41,19 +42,19 @@ export function TransactieForm({
   const today = new Date().toISOString().slice(0, 10);
   const [datum, setDatum] = useState<string>(initial?.datum ?? today);
   const [locationId, setLocationId] = useState<string>(
-    initial?.location_id ? String(initial.location_id) : "",
+    initial?.locationId ? String(initial.locationId) : "",
   );
   const [boekstuk, setBoekstuk] = useState<string>(
     initial?.boekstuk ? String(initial.boekstuk) : "",
   );
-  const [bedragIn, setBedragIn] = useState(fmtDecimal(initial?.bedrag_inkomsten));
-  const [bedragUit, setBedragUit] = useState(fmtDecimal(initial?.bedrag_uitgaven));
-  const [bedragDeel, setBedragDeel] = useState(fmtDecimal(initial?.bedrag_deeluitgaven));
-  const [btwIn, setBtwIn] = useState(fmtDecimal(initial?.btw_inkomsten));
-  const [btwUit, setBtwUit] = useState(fmtDecimal(initial?.btw_uitgaven));
-  const [btwDeel, setBtwDeel] = useState(fmtDecimal(initial?.btw_deeluitgaven));
+  const [bedragIn, setBedragIn] = useState(fmtDecimal(initial?.bedragInkomsten));
+  const [bedragUit, setBedragUit] = useState(fmtDecimal(initial?.bedragUitgaven));
+  const [bedragDeel, setBedragDeel] = useState(fmtDecimal(initial?.bedragDeeluitgaven));
+  const [btwIn, setBtwIn] = useState(fmtDecimal(initial?.btwInkomsten));
+  const [btwUit, setBtwUit] = useState(fmtDecimal(initial?.btwUitgaven));
+  const [btwDeel, setBtwDeel] = useState(fmtDecimal(initial?.btwDeeluitgaven));
   const [btwCodeId, setBtwCodeId] = useState<string>(
-    initial?.btw_code_id ? String(initial.btw_code_id) : ""
+    initial?.btwCodeId ? String(initial.btwCodeId) : ""
   );
 
   const suggestedBoekstuk = useMemo(() => {
@@ -159,7 +160,7 @@ export function TransactieForm({
         <select
           id="ledger_account_id"
           name="ledger_account_id"
-          defaultValue={initial?.ledger_account_id ?? ""}
+          defaultValue={initial?.ledgerAccountId ?? ""}
           className="h-11 md:h-9 rounded-md border bg-background px-2 text-base md:text-sm"
         >
           <option value="">— Geen —</option>

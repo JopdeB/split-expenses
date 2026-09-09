@@ -1,11 +1,11 @@
 import Link from "next/link";
+import { and, asc, desc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
 
-import { createClient } from "@/lib/supabase/server";
+import { db, tables } from "@/lib/db";
 import { formatDate, formatEuro } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { TransactiesFilters } from "@/components/transacties-filters";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
-import type { LedgerAccount, Location, TransactionWithRefs } from "@/lib/types";
 
 type SearchParams = {
   jaar?: string;
@@ -20,44 +20,47 @@ export default async function TransactiesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
-  const supabase = await createClient();
 
-  const [{ data: locations }, { data: ledgerAccounts }] = await Promise.all([
-    supabase.from("locations").select("*").order("sort_order"),
-    supabase.from("ledger_accounts").select("*").order("sort_order"),
+  const [locations, ledgerAccounts] = await Promise.all([
+    db.select().from(tables.locations).orderBy(asc(tables.locations.sortOrder)),
+    db.select().from(tables.ledgerAccounts).orderBy(asc(tables.ledgerAccounts.sortOrder)),
   ]);
 
-  let q = supabase
-    .from("v_transactions")
-    .select("*")
-    .order("datum", { ascending: false })
-    .order("boekstuk", { ascending: false });
-
+  const filters: SQL[] = [];
   if (sp.jaar && sp.jaar !== "all") {
     const y = parseInt(sp.jaar, 10);
     if (Number.isFinite(y)) {
-      q = q.gte("datum", `${y}-01-01`).lte("datum", `${y}-12-31`);
+      filters.push(gte(tables.vTransactions.datum, `${y}-01-01`));
+      filters.push(lte(tables.vTransactions.datum, `${y}-12-31`));
     }
   }
   if (sp.location && sp.location !== "all") {
-    q = q.eq("location_id", parseInt(sp.location, 10));
+    filters.push(eq(tables.vTransactions.locationId, parseInt(sp.location, 10)));
   }
   if (sp.ledger && sp.ledger !== "all") {
-    q = q.eq("ledger_account_id", parseInt(sp.ledger, 10));
+    filters.push(eq(tables.vTransactions.ledgerAccountId, parseInt(sp.ledger, 10)));
   }
   if (sp.q) {
     // Match on either omschrijving or grootboek code (so typing "8000"
-    // finds all huurinkomsten). PostgREST's or() uses a comma-separated
-    // list where commas inside values must be percent-encoded.
-    const term = sp.q.replace(/,/g, "%2C");
-    q = q.or(`omschrijving.ilike.%${term}%,ledger_code.ilike.%${term}%`);
+    // finds all huurinkomsten).
+    const term = `%${sp.q}%`;
+    const orClause = or(
+      ilike(tables.vTransactions.omschrijving, term),
+      ilike(tables.vTransactions.ledgerCode, term),
+    );
+    if (orClause) filters.push(orClause);
   }
 
-  const { data: rows } = await q.limit(500);
+  const rows = await db
+    .select()
+    .from(tables.vTransactions)
+    .where(filters.length ? and(...filters) : undefined)
+    .orderBy(desc(tables.vTransactions.datum), desc(tables.vTransactions.boekstuk))
+    .limit(500);
 
   // Distinct years derived from data — fallback to current year if empty
   const allYears = new Set<number>();
-  for (const r of rows ?? []) allYears.add(r.jaar);
+  for (const r of rows) allYears.add(r.jaar);
   if (allYears.size === 0) allYears.add(new Date().getFullYear());
   const years = Array.from(allYears).sort((a, b) => b - a);
 
@@ -71,22 +74,22 @@ export default async function TransactiesPage({
       </div>
 
       <TransactiesFilters
-        locations={(locations as Location[]) ?? []}
-        ledgerAccounts={(ledgerAccounts as LedgerAccount[]) ?? []}
+        locations={locations}
+        ledgerAccounts={ledgerAccounts}
         years={years}
       />
 
       {/* Mobile: card layout */}
       <div className="md:hidden flex flex-col gap-2">
-        {(rows as TransactionWithRefs[] | null)?.length === 0 && (
+        {rows.length === 0 && (
           <p className="p-4 text-center text-muted-foreground text-sm border rounded-md">
             Geen transacties gevonden.
           </p>
         )}
-        {(rows as TransactionWithRefs[] | null)?.map((r) => {
-          const inN = Number(r.bedrag_inkomsten) || 0;
-          const uitN = Number(r.bedrag_uitgaven) || 0;
-          const deelN = Number(r.bedrag_deeluitgaven) || 0;
+        {rows.map((r) => {
+          const inN = Number(r.bedragInkomsten) || 0;
+          const uitN = Number(r.bedragUitgaven) || 0;
+          const deelN = Number(r.bedragDeeluitgaven) || 0;
           // Pick the dominant amount + color
           let amount = 0;
           let amountClass = "";
@@ -109,11 +112,11 @@ export default async function TransactiesPage({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-xs text-muted-foreground">
-                    {formatDate(r.datum)} · {r.location_name}
+                    {formatDate(r.datum)} · {r.locationName}
                     {r.boekstuk ? ` · #${r.boekstuk}` : ""}
                   </div>
                   <div className="text-sm font-medium truncate">
-                    {r.ledger_code ? `${r.ledger_code} ${r.ledger_name}` : "Geen grootboek"}
+                    {r.ledgerCode ? `${r.ledgerCode} ${r.ledgerName}` : "Geen grootboek"}
                   </div>
                   {r.omschrijving && (
                     <div className="text-xs text-muted-foreground truncate mt-0.5">
@@ -125,14 +128,14 @@ export default async function TransactiesPage({
                   {amount === 0 ? "—" : formatEuro(amount)}
                 </div>
               </div>
-              {(Number(r.btw_inkomsten) || Number(r.btw_uitgaven) || Number(r.btw_deeluitgaven)) && (
+              {(Number(r.btwInkomsten) || Number(r.btwUitgaven) || Number(r.btwDeeluitgaven)) && (
                 <div className="text-[11px] text-muted-foreground mt-1">
                   BTW: {formatEuro(
-                    Number(r.btw_inkomsten) ||
-                      Number(r.btw_uitgaven) ||
-                      Number(r.btw_deeluitgaven),
+                    Number(r.btwInkomsten) ||
+                      Number(r.btwUitgaven) ||
+                      Number(r.btwDeeluitgaven),
                   )}
-                  {r.btw_label ? ` · ${r.btw_label}` : ""}
+                  {r.btwLabel ? ` · ${r.btwLabel}` : ""}
                 </div>
               )}
             </Link>
@@ -161,41 +164,41 @@ export default async function TransactiesPage({
             </tr>
           </thead>
           <tbody>
-            {(rows as TransactionWithRefs[] | null)?.length === 0 && (
+            {rows.length === 0 && (
               <tr>
                 <td colSpan={13} className="p-4 text-center text-muted-foreground">
                   Geen transacties gevonden.
                 </td>
               </tr>
             )}
-            {(rows as TransactionWithRefs[] | null)?.map((r) => (
+            {rows.map((r) => (
               <tr key={r.id} className="border-t hover:bg-muted/20">
                 <td className="p-2 whitespace-nowrap">{formatDate(r.datum)}</td>
-                <td className="p-2 whitespace-nowrap">{r.location_name}</td>
+                <td className="p-2 whitespace-nowrap">{r.locationName}</td>
                 <td className="p-2 text-muted-foreground">{r.boekstuk}</td>
                 <td className="p-2 whitespace-nowrap">
-                  {r.ledger_code ? `${r.ledger_code} ${r.ledger_name}` : "—"}
+                  {r.ledgerCode ? `${r.ledgerCode} ${r.ledgerName}` : "—"}
                 </td>
                 <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">
-                  {r.btw_label ?? "—"}
+                  {r.btwLabel ?? "—"}
                 </td>
                 <td className="p-2 text-right whitespace-nowrap">
-                  {formatEuro(r.bedrag_inkomsten)}
+                  {formatEuro(r.bedragInkomsten)}
                 </td>
                 <td className="p-2 text-right whitespace-nowrap">
-                  {formatEuro(r.btw_inkomsten)}
+                  {formatEuro(r.btwInkomsten)}
                 </td>
                 <td className="p-2 text-right whitespace-nowrap text-red-700">
-                  {formatEuro(r.bedrag_uitgaven)}
+                  {formatEuro(r.bedragUitgaven)}
                 </td>
                 <td className="p-2 text-right whitespace-nowrap text-red-700">
-                  {formatEuro(r.btw_uitgaven)}
+                  {formatEuro(r.btwUitgaven)}
                 </td>
                 <td className="p-2 text-right whitespace-nowrap text-amber-700">
-                  {formatEuro(r.bedrag_deeluitgaven)}
+                  {formatEuro(r.bedragDeeluitgaven)}
                 </td>
                 <td className="p-2 text-right whitespace-nowrap text-amber-700">
-                  {formatEuro(r.btw_deeluitgaven)}
+                  {formatEuro(r.btwDeeluitgaven)}
                 </td>
                 <td className="p-2 max-w-xs truncate">{r.omschrijving}</td>
                 <td className="p-2 whitespace-nowrap text-right">
@@ -210,7 +213,7 @@ export default async function TransactiesPage({
         </table>
       </div>
       <p className="text-xs text-muted-foreground">
-        {(rows as unknown[] | null)?.length ?? 0} resultaten (max 500 per pagina).
+        {rows.length} resultaten (max 500 per pagina).
       </p>
     </>
   );
