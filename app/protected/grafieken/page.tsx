@@ -6,6 +6,8 @@ import { UitgavenPerMaandChart } from "@/components/charts/uitgaven-per-maand";
 import { TopCategorienChart } from "@/components/charts/top-categorien";
 import { InkomstenUitgavenChart } from "@/components/charts/inkomsten-uitgaven";
 
+export const dynamic = "force-dynamic";
+
 type SearchParams = { jaar?: string };
 
 const MAANDEN = ["Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];

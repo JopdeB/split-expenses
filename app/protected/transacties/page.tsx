@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { TransactiesFilters } from "@/components/transacties-filters";
 import { DeleteTransactionButton } from "@/components/delete-transaction-button";
 
+export const dynamic = "force-dynamic";
+
 type SearchParams = {
   jaar?: string;
   location?: string;

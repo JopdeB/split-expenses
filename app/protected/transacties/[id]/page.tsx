@@ -6,6 +6,8 @@ import { TransactieForm } from "@/components/transactie-form";
 import { updateTransaction } from "@/lib/actions";
 import { fetchNextBoekstukMap } from "@/lib/next-boekstuk";
 
+export const dynamic = "force-dynamic";
+
 export default async function EditTransactiePage({
   params,
 }: {

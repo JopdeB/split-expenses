@@ -4,6 +4,8 @@ import { db, tables } from "@/lib/db";
 import { formatEuro } from "@/lib/format";
 import { YearFilter } from "@/components/year-filter";
 
+export const dynamic = "force-dynamic";
+
 type SearchParams = { jaar?: string };
 
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"] as const;

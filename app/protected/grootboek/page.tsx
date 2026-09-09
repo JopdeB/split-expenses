@@ -4,6 +4,8 @@ import { db, tables } from "@/lib/db";
 import { formatEuro } from "@/lib/format";
 import { YearFilter } from "@/components/year-filter";
 
+export const dynamic = "force-dynamic";
+
 type SearchParams = { jaar?: string };
 
 export default async function GrootboekPage({

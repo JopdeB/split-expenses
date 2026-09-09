@@ -13,9 +13,18 @@ declare global {
 function makePool(): Pool {
   const url = process.env.DATABASE_URL;
   if (!url) {
-    throw new Error(
-      "DATABASE_URL is not set. Set it in .env.local (see .env.example).",
-    );
+    // Do NOT throw at module load: Next's build-time page-data collector
+    // imports this file in an environment without runtime env vars, and a
+    // throw here breaks the whole build. Return a Pool that will fail lazily
+    // when a query actually runs — that's the only place the missing env
+    // matters.
+    return new Pool({
+      connectionString: "postgresql://invalid@127.0.0.1:1/invalid",
+      max: 1,
+      // Prevent the invalid pool from consuming a socket at boot.
+      idleTimeoutMillis: 1,
+      connectionTimeoutMillis: 1,
+    });
   }
   return new Pool({
     connectionString: url,
