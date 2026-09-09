@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-import { createClient } from "@/lib/supabase/server";
 import { hasEnvVars } from "@/lib/utils";
+import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { EnvVarWarning } from "@/components/env-var-warning";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   if (!hasEnvVars) {
@@ -12,20 +14,16 @@ export default async function Home() {
       <main className="min-h-screen flex flex-col items-center justify-center p-6">
         <h1 className="text-2xl font-bold mb-4">Admin Pap &amp; Sjanet</h1>
         <p className="text-sm text-muted-foreground mb-6 max-w-md text-center">
-          Supabase environment variables ontbreken nog. Vul <code>.env.local</code> aan met
-          <code> NEXT_PUBLIC_SUPABASE_URL</code> en
-          <code> NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>.
+          <code>DATABASE_URL</code> ontbreekt. Vul <code>.env.local</code> aan of
+          zet de env-var in Vercel/Docker.
         </p>
         <EnvVarWarning />
       </main>
     );
   }
 
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  if (data?.claims) {
-    redirect("/protected");
-  }
+  const session = await getSession();
+  if (session.userId) redirect("/protected");
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6">

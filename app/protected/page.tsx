@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc } from "drizzle-orm";
 
-import { createClient } from "@/lib/supabase/server";
 import { db, tables } from "@/lib/db";
+import { getSession } from "@/lib/session";
 import { formatEuro } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,8 @@ import { Button } from "@/components/ui/button";
 export const dynamic = "force-dynamic";
 
 export default async function ProtectedPage() {
-  // Auth check still via Supabase — switches to iron-session later in the
-  // migration. Data queries have already moved to Drizzle.
-  const supabase = await createClient();
-  const { data: claims } = await supabase.auth.getClaims();
-  if (!claims?.claims) redirect("/auth/login");
+  const session = await getSession();
+  if (!session.userId) redirect("/auth/login");
 
   const [btw, latest] = await Promise.all([
     db

@@ -1,20 +1,43 @@
-import { updateSession } from "@/lib/supabase/proxy";
-import { type NextRequest } from "next/server";
+import { unsealData } from "iron-session";
+import { NextResponse, type NextRequest } from "next/server";
+
+import { SESSION_COOKIE, type SessionData, sessionOptions } from "@/lib/session";
+
+async function isAuthenticated(req: NextRequest): Promise<boolean> {
+  const raw = req.cookies.get(SESSION_COOKIE)?.value;
+  if (!raw) return false;
+  try {
+    const data = await unsealData<SessionData>(raw, { password: sessionOptions.password });
+    return !!data.userId;
+  } catch {
+    return false;
+  }
+}
 
 export async function proxy(request: NextRequest) {
-  return await updateSession(request);
+  const { pathname } = request.nextUrl;
+
+  // Public paths — no auth required.
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/api/keepalive")
+  ) {
+    return NextResponse.next();
+  }
+
+  const authed = await isAuthenticated(request);
+  if (!authed) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/login";
+    return NextResponse.redirect(url);
+  }
+  return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - images - .svg, .png, .jpg, .jpeg, .gif, .webp
-     * Feel free to modify this pattern to include more paths.
-     */
+    // All routes except static assets.
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

@@ -2,19 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
 
-import { createClient } from "@/lib/supabase/server";
 import { db, tables } from "@/lib/db";
+import { getSession } from "@/lib/session";
 
 // Node runtime needed for exceljs streams + Buffer.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  // Auth is still Supabase during the migration; only the data queries have
-  // moved to Drizzle.
-  const supabase = await createClient();
-  const { data: userResp } = await supabase.auth.getUser();
-  if (!userResp?.user) {
+  const session = await getSession();
+  if (!session.userId) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

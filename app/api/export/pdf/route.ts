@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
 import { and, asc, eq, gte, lte, type SQL } from "drizzle-orm";
 
-import { createClient } from "@/lib/supabase/server";
 import { db, tables } from "@/lib/db";
+import { getSession } from "@/lib/session";
 import type {
   BtwQuarterRow as BtwRow,
   GrootboekRow as GbRow,
@@ -37,9 +37,8 @@ const CONTENT_WIDTH = PAGE_WIDTH - 2 * PAGE_MARGIN; // 523pt
 const PAGE_BOTTOM = 842 - 50; // leave room for footer
 
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: userResp } = await supabase.auth.getUser();
-  if (!userResp?.user) return new NextResponse("Unauthorized", { status: 401 });
+  const session = await getSession();
+  if (!session.userId) return new NextResponse("Unauthorized", { status: 401 });
 
   const url = new URL(req.url);
   const jaarParam = url.searchParams.get("jaar");
