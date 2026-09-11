@@ -8,16 +8,14 @@ export function DeleteTransactionButton({ id }: { id: number }) {
   const [pending, start] = useTransition();
   return (
     <Button
-      variant="ghost"
-      size="sm"
+      variant="destructive"
       disabled={pending}
       onClick={() => {
         if (!confirm("Deze transactie verwijderen?")) return;
         start(() => deleteTransaction(id));
       }}
-      className="text-red-600 hover:text-red-700 h-7 px-2"
     >
-      {pending ? "…" : "Verwijder"}
+      {pending ? "Bezig met verwijderen…" : "Verwijder"}
     </Button>
   );
 }
