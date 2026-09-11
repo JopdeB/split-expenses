@@ -5,7 +5,7 @@ import { db, tables } from "@/lib/db";
 import { formatDate, formatEuro } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { TransactiesFilters } from "@/components/transacties-filters";
-import { DeleteTransactionButton } from "@/components/delete-transaction-button";
+import { ClickableTr } from "@/components/clickable-tr";
 
 export const dynamic = "force-dynamic";
 
@@ -145,7 +145,8 @@ export default async function TransactiesPage({
         })}
       </div>
 
-      {/* Desktop: table layout */}
+      {/* Desktop: table layout. Whole row is clickable → edit page.
+          Delete moved to the edit page so it's near what you're removing. */}
       <div className="hidden md:block border rounded-md overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left">
@@ -162,19 +163,18 @@ export default async function TransactiesPage({
               <th className="p-2 font-medium text-right">Deeluitgaven</th>
               <th className="p-2 font-medium text-right">BTW deel</th>
               <th className="p-2 font-medium">Omschrijving</th>
-              <th className="p-2 font-medium text-right"></th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={13} className="p-4 text-center text-muted-foreground">
+                <td colSpan={12} className="p-4 text-center text-muted-foreground">
                   Geen transacties gevonden.
                 </td>
               </tr>
             )}
             {rows.map((r) => (
-              <tr key={r.id} className="border-t hover:bg-muted/20">
+              <ClickableTr key={r.id} href={`/protected/transacties/${r.id}`}>
                 <td className="p-2 whitespace-nowrap">{formatDate(r.datum)}</td>
                 <td className="p-2 whitespace-nowrap">{r.locationName}</td>
                 <td className="p-2 text-muted-foreground">{r.boekstuk}</td>
@@ -203,13 +203,7 @@ export default async function TransactiesPage({
                   {formatEuro(r.btwDeeluitgaven)}
                 </td>
                 <td className="p-2 max-w-xs truncate">{r.omschrijving}</td>
-                <td className="p-2 whitespace-nowrap text-right">
-                  <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-                    <Link href={`/protected/transacties/${r.id}`}>Bewerk</Link>
-                  </Button>
-                  <DeleteTransactionButton id={r.id} />
-                </td>
-              </tr>
+              </ClickableTr>
             ))}
           </tbody>
         </table>

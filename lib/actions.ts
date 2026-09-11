@@ -172,6 +172,9 @@ export async function deleteTransaction(id: number) {
     await client.query(`delete from public.transactions where id = $1`, [id]);
   });
   revalidateAll();
+  // Delete is now triggered from the edit page — staying there would 404 on
+  // the just-removed id, so bounce back to the list.
+  redirect("/protected/transacties");
 }
 
 /**

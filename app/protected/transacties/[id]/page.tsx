@@ -5,6 +5,7 @@ import { db, tables } from "@/lib/db";
 import { TransactieForm } from "@/components/transactie-form";
 import { updateTransaction } from "@/lib/actions";
 import { fetchNextBoekstukMap } from "@/lib/next-boekstuk";
+import { DeleteTransactionButton } from "@/components/delete-transaction-button";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,10 @@ export default async function EditTransactiePage({
 
   return (
     <>
-      <h1 className="text-2xl font-bold">Transactie bewerken</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl font-bold">Transactie bewerken</h1>
+        <DeleteTransactionButton id={txId} />
+      </div>
       <TransactieForm
         action={updateWithId}
         locations={locations}
